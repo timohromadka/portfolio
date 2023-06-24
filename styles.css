@@ -1,5 +1,90 @@
+* {
+    font-family: 'Comfortaa', cursive;
+}
+
 body {
-    background-color: #d3d3d3;
-    font-family: Arial, sans-serif;
-    color: #333;
+    background-color: lightgray;
+    font-family: 'Comfortaa', cursive;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* viewport height */
+    min-height: 80vh;
+}
+
+.middle-panel {
+    display: flex;
+    flex-direction: row;
+    align-items: start;
+    gap: 20px;
+    width: 90vw; /* viewport width */
+}
+
+.left-column {
+    /* adjust width according to your preference */
+    width: 50%; 
+}
+
+.right-column {
+    /* adjust width according to your preference */
+    width: 70%;
+}
+
+.profile-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.profile-section img {
+    width: 150px;
+    height: 150px;
+}
+
+#profile-image {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%; /* makes the image circular */
+}
+
+
+.accordion {
+    width: 100%;
+}
+
+.accordion-item {
+    border: 0px solid #000;
+    margin-bottom: 0px;
+}
+
+.accordion-button {
+    width: 30%;
+    padding: 10px;
+    text-align: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    background-color: #f0f0f0;
+}
+
+.accordion-content {
+    width: 0;
+    overflow: hidden;
+    transition: width 0.3s ease; /* adjust speed as needed */
+}
+
+.accordion-content.active {
+    width: 70%; /* adjust this as needed */
+}
+
+.accordion-container {
+    display: flex;
+    width: 100%;
+}
+
+.accordion-button:hover {
+    background-color: #ffcccc; /* light red */
+    transition: background-color 0.3s ease; /* makes the color change gradual */
 }
