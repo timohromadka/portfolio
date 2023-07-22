@@ -21,6 +21,22 @@
     transition: opacity 0.15s;
 }
 
+.contactTile {
+    z-index: 2;
+    position: fixed;
+    width: 250px;
+    height: 100px;
+    transform: translateY(-50%);
+    opacity: 1;
+    border: 5px solid rgb(187, 187, 187);
+    animation: fadeIn 2s ease-in-out;
+    text-align: center;
+    font-size: 13px;
+    background-color: white;
+}
+
+
+
 #nameTile {
     z-index: 2;
     position: fixed;
@@ -78,6 +94,10 @@
 
 .tile:hover {
     opacity: 0.6;
+}
+
+.contactTile:hover {
+    opacity: 1;
 }
 
 #nameTile h1 {
