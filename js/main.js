@@ -330,4 +330,15 @@
 			event.preventDefault();
 		});
 	}
+
+	// Dynamically change the color of the background when highlighting text with cursor
+	document.onmouseup = changeHighlightColor;
+	let colors = ['red', 'orange', 'gray', 'blue', 'green'];
+	let index = 0;
+
+	function changeHighlightColor() {
+		document.body.className = colors[index];
+		index = (index + 1) % colors.length;  // Cycle through colors
+	}
+
 }());
