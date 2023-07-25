@@ -34,10 +34,9 @@
     font-size: 13px;
     background-color: white;
 
-    /* add these lines */
-    display: flex;            /* make it a flex container */
-    justify-content: center;  /* center children horizontally */
-    align-items: center;      /* center children vertically */
+    display: flex;            
+    justify-content: center;  
+    align-items: center;      
 }
 
 

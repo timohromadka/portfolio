@@ -28,6 +28,64 @@ body {
   height: 100vh;
 }
 
+.speech-bubble {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 0;
+  position: absolute;
+  z-index: 4;
+  top: 85%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.speech-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: 85%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent #555 transparent;
+}
+
+.navbar-nav a:hover .speech-bubble {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* This is for webkit browsers like Chrome, Safari */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DD356E; /* red color */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b62455; /* darker red color on hover */
+}
+
+/* This is for Firefox
+scrollbar-width: thin;
+scrollbar-color: #ff4b4b #f1f1f1; */
+
+
+
 .company-info {
   color: #888888;
   font-size: 14px;
