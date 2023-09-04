@@ -276,31 +276,37 @@
 		var tileContainer = $('#tileContainer');
 		var margin = 15;
 		var side = 100;
-		var numTilesWidth = Math.ceil(window.innerWidth / (margin + side));
-		var numTilesHeight = Math.ceil(window.innerHeight / (margin + side));
 		var tiles = [];
 	
-		var excludedLocations = [[1,3], [1,4], [1,5], 
-								[2,10], [2,11], [2,12], [3,10], [3,11], [3,12], [4,10], [4,11], [4,12],
-								[1,8], [1,9], [2,8], [2,9]];
-
-		for (var i = 0; i < numTilesHeight; i++) {
-			for (var j = 0; j < numTilesWidth; j++) {
-				// Check if the current location is in the excluded locations
-				if (excludedLocations.some(loc => loc[0] === i && loc[1] === j)) {
-					continue;
-				}
-				var tile = $('<div class="tile"></div>');
-				tile.css('top', (i * (margin + side)) + 'px');
-				tile.css('left', (j * (margin + side)) + 'px');
-				tile.css('background-color', colors[Math.floor(Math.random() * colors.length)]);
-				tileContainer.append(tile);
-				if (tile.prop('id') !== 'nameTile' && tile.prop('id') !== 'imageTile' && tile.prop('id') !== 'aboutTile') {
-					tiles.push({element: tile, x: j * (margin + side), y: i * (margin + side)});
+		var excludedLocations = [
+			// [1,3], [1,4], [1,5], 
+			// [2,10], [2,11], [2,12], [3,10], [3,11], [3,12], [4,10], [4,11], [4,12],
+			// [1,8], [1,9], [2,8], [2,9]
+			];
+	
+		function createGrid() {
+			tileContainer.empty();  // clear the container
+			tiles = [];  // clear the tiles array
+			var numTilesWidth = Math.ceil(window.innerWidth / (margin + side));
+			var numTilesHeight = Math.ceil(window.innerHeight / (margin + side));
+			
+			for (var i = 0; i < numTilesHeight; i++) {
+				for (var j = 0; j < numTilesWidth; j++) {
+					// Check if the current location is in the excluded locations
+					if (excludedLocations.some(loc => loc[0] === i && loc[1] === j)) {
+						continue;
+					}
+					var tile = $('<div class="tile"></div>');
+					tile.css('top', (i * (margin + side)) + 'px');
+					tile.css('left', (j * (margin + side)) + 'px');
+					tile.css('background-color', colors[Math.floor(Math.random() * colors.length)]);
+					tileContainer.append(tile);
+					if (tile.prop('id') !== 'nameTile' && tile.prop('id') !== 'imageTile' && tile.prop('id') !== 'aboutTile') {
+						tiles.push({element: tile, x: j * (margin + side), y: i * (margin + side)});
+					}
 				}
 			}
 		}
-		
 	
 		$(document).mousemove(function(e) {
 			var tileContainerOffset = tileContainer.offset();  // get the current offset of the tileContainer
@@ -320,7 +326,14 @@
 				}
 			});
 		});
+	
+		createGrid();  // create the grid when the document is ready
+	
+		$(window).resize(function() {
+			createGrid();  // update the grid whenever the window is resized
+		});
 	});
+	
 	
 
 	// Prevent page scroll to top when "Learn More" link is clicked
