@@ -99,7 +99,7 @@ h3 { margin: 48px 0 14px; font-weight: 800; font-size: 18px; letter-spacing: -.0
 .field { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--ink); }
 .field:first-of-type { border-top: 1px solid var(--ink); }
 .field label { font-weight: 700; }
-.field .hint { grid-column: 2; font-size: 13px; margin-top: -8px; opacity: .75; }
+.field .hint { grid-column: 2; font-size: 13px; margin-top: 12px; opacity: .75; }
 
 input[type=text], input[type=number], input[type=password], select {
   background: transparent; border: 0; border-bottom: 1.5px solid var(--ink);
@@ -231,7 +231,7 @@ body.display #app { max-width: none; padding: 4vh 4vw; }
   .tabs { margin-top: 48px; }
   .tabs button { font-size: 15px; }
   .field { grid-template-columns: 1fr; gap: 6px; }
-  .field .hint { grid-column: 1; margin-top: 0; }
+  .field .hint { grid-column: 1; margin-top: 10px; }
   .board { grid-template-columns: 40px 1fr; grid-template-rows: auto auto auto; }
   .board .bno { grid-row: span 3; }
   .board .res { padding: 4px 0; }
