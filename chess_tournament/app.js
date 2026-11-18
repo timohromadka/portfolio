@@ -461,13 +461,12 @@
       </div>
     </dialog>
     <dialog id="dlg-quit">
-      <h2>Quit tournament</h2>
-      <p>This ends the tournament and permanently deletes all players, pairings and results from this browser.
-      Export a copy first if you want to keep it.</p>
+      <h2 id="quit-title"></h2>
+      <p id="quit-text"></p>
       <p>Type <b id="quit-word"></b> to confirm.</p>
       <input type="text" class="confirm-input" id="quit-input" autocomplete="off" spellcheck="false">
       <div class="actions">
-        <button class="btn solid" data-act="quit-confirm" id="quit-btn" disabled>Delete tournament</button>
+        <button class="btn solid" data-act="quit-confirm" id="quit-btn" disabled></button>
         <button class="btn" data-act="export">Export first</button>
         <button class="btn" data-act="close">Cancel</button>
       </div>
@@ -495,18 +494,41 @@
         alert('That file is not a tournament export.');
         return;
       }
-      if (!confirm('Replace the current tournament with this file?')) return;
-      S = data;
-      ui.view = null; ui.sel = null;
-      document.getElementById('dlg-data').close();
-      commit();
+      const load = () => { S = data; ui.tab = 'setup'; ui.view = null; ui.sel = null; commit(); window.scrollTo(0, 0); };
+      if (isEmpty()) { document.getElementById('dlg-data').close(); load(); return; }
+      typedConfirm({
+        title: 'Replace tournament',
+        text: `Importing <b>${esc(data.name || 'this file')}</b> permanently deletes the current tournament, with all its players, pairings and results, from this browser. Export a copy first if you want to keep it.`,
+        button: 'Replace tournament',
+        run: load,
+      });
     });
   });
 
-  // the word to type to delete: the tournament's name, or "delete" if it has none
+  // Anything that deletes the current tournament asks you to type its name
+  // (or "delete" if it has none), instead of a yes/no popup.
   const quitWord = () => S.name || 'delete';
-  document.getElementById('quit-input').addEventListener('input', e => {
-    document.getElementById('quit-btn').disabled = e.target.value.trim() !== quitWord();
+  const isEmpty = () => S.status === 'setup' && !S.players.length;
+  let pendingConfirm = null;
+  function typedConfirm(opts) {
+    document.querySelectorAll('dialog[open]').forEach(dl => dl.close());
+    pendingConfirm = opts.run;
+    document.getElementById('quit-title').textContent = opts.title;
+    document.getElementById('quit-text').innerHTML = opts.text;
+    document.getElementById('quit-btn').textContent = opts.button;
+    document.getElementById('quit-word').textContent = quitWord();
+    const inp = document.getElementById('quit-input');
+    inp.value = '';
+    document.getElementById('quit-btn').disabled = true;
+    document.getElementById('dlg-quit').showModal();
+    inp.focus();
+  }
+  const quitInput = document.getElementById('quit-input');
+  quitInput.addEventListener('input', () => {
+    document.getElementById('quit-btn').disabled = quitInput.value.trim() !== quitWord();
+  });
+  quitInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('quit-btn').click();
   });
 
   /* ---------- actions ---------- */
@@ -552,22 +574,22 @@
       case 'exit': setDisplay(false); break;
       case 'export': exportFile(); break;
       case 'import': document.getElementById('file').click(); break;
-      case 'quit': {
-        document.querySelectorAll('dialog[open]').forEach(dl => dl.close());
-        document.getElementById('quit-word').textContent = quitWord();
-        const inp = document.getElementById('quit-input');
-        inp.value = '';
-        document.getElementById('quit-btn').disabled = true;
-        document.getElementById('dlg-quit').showModal();
-        inp.focus();
+      case 'quit':
+        typedConfirm({
+          title: 'Quit tournament',
+          text: 'This ends the tournament and permanently deletes all players, pairings and results from this browser. Export a copy first if you want to keep it.',
+          button: 'Delete tournament',
+          run: () => { S = fresh(); ui.tab = 'setup'; ui.view = null; ui.sel = null; commit(); window.scrollTo(0, 0); },
+        });
+        break;
+      case 'quit-confirm': {
+        if (quitInput.value.trim() !== quitWord() || !pendingConfirm) return;
+        const run = pendingConfirm;
+        pendingConfirm = null;
+        el.closest('dialog').close();
+        run();
         break;
       }
-      case 'quit-confirm':
-        if (document.getElementById('quit-input').value.trim() !== quitWord()) return;
-        S = fresh(); ui.tab = 'setup'; ui.view = null; ui.sel = null;
-        el.closest('dialog').close();
-        commit(); window.scrollTo(0, 0);
-        break;
 
       case 'format':
         if (started() || S.format === d.v) return;
