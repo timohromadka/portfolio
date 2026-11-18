@@ -47,11 +47,12 @@ button, input, select { font: inherit; color: inherit; }
   font-size: clamp(56px, 9vw, 92px);
   line-height: .9;
   letter-spacing: -.045em;
+  overflow-wrap: anywhere;
 }
 
 .issue { margin: 22px 0 8px; font-family: var(--serif); font-weight: 700; font-size: 18px; }
 
-.credits { margin: 0; font-family: var(--serif); font-style: italic; font-size: 11px; line-height: 1.2; }
+.credits { margin: 0; font-size: 13px; line-height: 1.35; font-weight: 500; }
 
 .icons { display: grid; grid-template-columns: 80px 80px; gap: 30px; }
 
@@ -66,13 +67,9 @@ button, input, select { font: inherit; color: inherit; }
 .icon.outline { background: transparent; color: var(--ink); border: 3px solid var(--ink); grid-column: 2; }
 .icon.outline svg { width: 30px; height: 30px; }
 
-/* ---------- band of squares ---------- */
-
-.band { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin: 96px 0 0; height: 22px; }
-
 /* ---------- tabs ---------- */
 
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: 3px 0 56px; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: 96px 0 56px; }
 .tabs button {
   border: 0; background: transparent; padding: 12px 0 0; text-align: left; cursor: pointer;
   font-weight: 800; font-size: 20px; letter-spacing: -.02em;
@@ -85,7 +82,7 @@ button, input, select { font: inherit; color: inherit; }
 
 h2 { margin: 0 0 6px; font-weight: 800; font-size: 40px; letter-spacing: -.035em; line-height: 1; }
 h3 { margin: 48px 0 14px; font-weight: 800; font-size: 18px; letter-spacing: -.01em; }
-.note { margin: 0 0 28px; font-family: var(--serif); font-style: italic; font-size: 13px; }
+.note { margin: 0 0 28px; font-size: 14px; max-width: 70ch; }
 .muted { opacity: .55; }
 
 .btn {
@@ -102,7 +99,7 @@ h3 { margin: 48px 0 14px; font-weight: 800; font-size: 18px; letter-spacing: -.0
 .field { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--ink); }
 .field:first-of-type { border-top: 1px solid var(--ink); }
 .field label { font-weight: 700; }
-.field .hint { grid-column: 2; font-family: var(--serif); font-style: italic; font-size: 12px; margin-top: -8px; }
+.field .hint { grid-column: 2; font-size: 13px; margin-top: -8px; opacity: .75; }
 
 input[type=text], input[type=number], select {
   background: transparent; border: 0; border-bottom: 1.5px solid var(--ink);
@@ -141,7 +138,8 @@ td input.num { border-bottom-color: transparent; }
 td input.num:hover { border-bottom-color: var(--ink); }
 .r { text-align: right; }
 th.r { text-align: right; }
-td.pts { font-weight: 800; }
+td.pts, th.pts { font-weight: 800; border-right: 2px solid var(--ink); padding-right: 14px; }
+th.pts + th, td.pts + td { padding-left: 14px; }
 tr.out td { opacity: .45; }
 .x { border: 0; background: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px; }
 
@@ -174,7 +172,7 @@ tr.out td { opacity: .45; }
 .sq { flex: none; width: 14px; height: 14px; border: 1.5px solid var(--ink); background: var(--paper); }
 .sq.b { background: var(--ink); }
 .player.sel .sq { border-color: var(--paper); }
-.flag { font-family: var(--serif); font-style: italic; font-size: 12px; }
+.flag { font-size: 12px; font-weight: 500; opacity: .75; }
 
 .res { display: flex; gap: 3px; padding: 0 6px; }
 .res button {
@@ -184,8 +182,8 @@ tr.out td { opacity: .45; }
 .res button.ff { width: 34px; font-size: 12px; }
 .res button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .res button:disabled { cursor: default; }
-.res .vs { width: 160px; justify-content: center; display: flex; font-family: var(--serif); font-style: italic; }
-.bye { padding: 0 14px; border: 1.5px dashed var(--ink); font-family: var(--serif); font-style: italic; grid-column: 3 / 5; }
+.res .vs { width: 160px; justify-content: center; display: flex; font-weight: 500; }
+.bye { padding: 0 14px; border: 1.5px dashed var(--ink); font-weight: 500; grid-column: 3 / 5; }
 
 .progress { font-weight: 700; }
 
@@ -197,7 +195,7 @@ dialog {
 }
 dialog::backdrop { background: rgba(22, 21, 19, .35); }
 dialog h2 { font-size: 30px; }
-dialog p { font-family: var(--serif); font-size: 14px; line-height: 1.5; }
+dialog p { font-size: 15px; line-height: 1.5; }
 dialog .actions { margin-top: 20px; }
 
 /* ---------- display mode ---------- */
@@ -230,7 +228,7 @@ body.display #app { max-width: none; padding: 4vh 4vw; }
   .icon.outline { border-width: 2px; }
   .icon.outline svg { width: 18px; height: 18px; }
   .icon.help { font-size: 22px; border-radius: 7px; }
-  .band { margin-top: 48px; }
+  .tabs { margin-top: 48px; }
   .tabs button { font-size: 15px; }
   .field { grid-template-columns: 1fr; gap: 6px; }
   .field .hint { grid-column: 1; margin-top: 0; }
@@ -244,3 +242,8 @@ body.display #app { max-width: none; padding: 4vh 4vw; }
   .add { grid-template-columns: 1fr 80px; }
   .add .btn { grid-column: span 2; }
 }
+
+/* ---------- quit ---------- */
+
+.danger { margin-top: 72px; padding-top: 16px; border-top: 1px solid var(--ink); }
+.confirm-input { width: 100%; margin: 4px 0 8px; font-size: 18px; font-weight: 700; }

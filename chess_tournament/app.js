@@ -81,8 +81,8 @@
     return `
       <header class="masthead">
         <div>
-          <h1>Chess<br>Tournament</h1>
-          <p class="issue">${esc(S.name || 'Untitled')} / ${esc(year)}</p>
+          <h1>${S.name ? esc(S.name) : 'Chess<br>Tournament'}</h1>
+          <p class="issue">${S.name ? 'Chess tournament' : 'Untitled'} / ${esc(year)}</p>
           <p class="credits">
             ${fmt}${rounds}<br>
             Time control ${tc()}<br>
@@ -97,11 +97,6 @@
           <button class="icon outline" data-act="data" title="Tournament file">${ICON_ROOK}</button>
         </div>
       </header>`;
-  }
-
-  function band() {
-    const tones = ['ht-3', 'ht-2', 'ht-4', 'ht-1', 'paper', 'ht-2', 'ht-3', 'ht-4'];
-    return `<div class="band" aria-hidden="true">${tones.map(t => t === 'paper' ? '<i></i>' : `<i class="ht ${t}"></i>`).join('')}</div>`;
   }
 
   function tabs() {
@@ -155,7 +150,11 @@
         <div class="hint">Given to one player in rounds with an odd number of players.</div></div></div>` : ''}
       <div class="field"><label>Tiebreaks</label>
         <div><div class="tb">${tb}</div><div class="hint" style="margin-top:8px">Applied in this order when points are equal.</div></div></div>
-      ${!lock ? `<div class="actions"><button class="btn solid" data-act="tab" data-v="players">Players →</button></div>` : ''}`;
+      ${!lock ? `<div class="actions"><button class="btn solid" data-act="tab" data-v="players">Players →</button></div>` : ''}
+      ${lock || S.players.length || S.name ? `<div class="actions danger">
+        <button class="btn" data-act="quit">Quit tournament</button>
+        <span class="note" style="margin:0">Ends the tournament and deletes it from this browser.</span>
+      </div>` : ''}`;
   }
 
   /* ---------- players ---------- */
@@ -312,7 +311,7 @@
     rows.forEach(r => { rankOf[r.id] = r.rank; });
     if (compact) {
       const k = tbs[0];
-      return `<table><thead><tr><th>#</th><th>Name</th><th class="r">Pts</th>${k ? `<th class="r">${E.TB_SHORT[k]}</th>` : ''}</tr></thead><tbody>
+      return `<table><thead><tr><th>#</th><th>Name</th><th class="r pts">Pts</th>${k ? `<th class="r">${E.TB_SHORT[k]}</th>` : ''}</tr></thead><tbody>
         ${rows.map(r => `<tr class="${r.withdrawn ? 'out' : ''}"><td>${r.rank}</td><td class="name">${esc(r.name)}</td>
           <td class="r pts">${pts(r.score) || '0'}</td>${k ? `<td class="r">${pts(r.tb[k])}</td>` : ''}</tr>`).join('')}
         </tbody></table>`;
@@ -320,14 +319,14 @@
     let rh = '';
     for (let i = 0; i < n; i++) rh += `<th>R${i + 1}</th>`;
     return `<div class="scroll"><table>
-      <thead><tr><th>#</th><th>Name</th><th class="r">Elo</th><th class="r">Pts</th>
+      <thead><tr><th>#</th><th>Name</th><th class="r pts">Pts</th><th class="r">Elo</th>
         ${tbs.map(k => `<th class="r" title="${E.TIEBREAKS[k]}">${E.TB_SHORT[k]}</th>`).join('')}
         <th class="r" title="Performance rating">Perf</th>${rh}</tr></thead>
       <tbody>${rows.map(r => {
         let rc = '';
         for (let i = 0; i < n; i++) rc += `<td>${roundCell(r, i, rankOf)}</td>`;
         return `<tr class="${r.withdrawn ? 'out' : ''}"><td>${r.rank}</td><td class="name">${esc(r.name)}${r.withdrawn ? ' <span class="flag">withdrawn</span>' : ''}</td>
-          <td class="r">${r.rating || '—'}</td><td class="r pts">${pts(r.score) || '0'}</td>
+          <td class="r pts">${pts(r.score) || '0'}</td><td class="r">${r.rating || '—'}</td>
           ${tbs.map(k => `<td class="r">${r.tb[k] == null ? '' : pts(r.tb[k]) || '0'}</td>`).join('')}
           <td class="r">${r.perf == null ? '—' : r.perf}</td>${rc}</tr>`;
       }).join('')}</tbody></table></div>`;
@@ -354,7 +353,7 @@
   function viewDisplay() {
     let left;
     if (!started()) {
-      left = `<h1>Chess<br>Tournament</h1><p class="issue">${esc(S.name || 'Untitled')} · Time control ${tc()}</p>
+      left = `<h1>${S.name ? esc(S.name) : 'Chess<br>Tournament'}</h1><p class="issue">Time control ${tc()}</p>
         <h3>${plural(S.players.length, 'player')} registered</h3>
         <table><tbody>${S.players.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0)).map((p, i) =>
           `<tr><td>${i + 1}</td><td class="name">${esc(p.name)}</td><td class="r">${p.rating || ''}</td></tr>`).join('')}</tbody></table>`;
@@ -390,7 +389,8 @@
   function render() {
     if (ui.tab === 'round' && !started()) ui.tab = 'setup';
     document.body.classList.toggle('display', display);
-    $app.innerHTML = display ? viewDisplay() : masthead() + band() + tabs() + `<main>${VIEWS[ui.tab]()}</main>`;
+    document.title = S.name || 'Chess Tournament';
+    $app.innerHTML = display ? viewDisplay() : masthead() + tabs() + `<main>${VIEWS[ui.tab]()}</main>`;
     if (ui.focusAdd) { const el = document.getElementById('pname'); if (el) el.focus(); ui.focusAdd = false; }
   }
 
@@ -420,8 +420,20 @@
       <div class="actions">
         <button class="btn" data-act="export">Export</button>
         <button class="btn" data-act="import">Import</button>
-        <button class="btn" data-act="new">New tournament</button>
+        <button class="btn" data-act="quit">Quit tournament</button>
         <button class="btn solid" data-act="close">Close</button>
+      </div>
+    </dialog>
+    <dialog id="dlg-quit">
+      <h2>Quit tournament</h2>
+      <p>This ends the tournament and permanently deletes all players, pairings and results from this browser.
+      Export a copy first if you want to keep it.</p>
+      <p>Type <b id="quit-word"></b> to confirm.</p>
+      <input type="text" class="confirm-input" id="quit-input" autocomplete="off" spellcheck="false">
+      <div class="actions">
+        <button class="btn solid" data-act="quit-confirm" id="quit-btn" disabled>Delete tournament</button>
+        <button class="btn" data-act="export">Export first</button>
+        <button class="btn" data-act="close">Cancel</button>
       </div>
     </dialog>
     <input type="file" id="file" accept=".json,application/json" hidden>`);
@@ -453,6 +465,12 @@
       document.getElementById('dlg-data').close();
       commit();
     });
+  });
+
+  // the word to type to delete: the tournament's name, or "delete" if it has none
+  const quitWord = () => S.name || 'delete';
+  document.getElementById('quit-input').addEventListener('input', e => {
+    document.getElementById('quit-btn').disabled = e.target.value.trim() !== quitWord();
   });
 
   /* ---------- actions ---------- */
@@ -489,11 +507,21 @@
       case 'exit': setDisplay(false); break;
       case 'export': exportFile(); break;
       case 'import': document.getElementById('file').click(); break;
-      case 'new':
-        if (!confirm('Start a new tournament? The current one will be erased from this browser. Export it first if you want to keep it.')) return;
+      case 'quit': {
+        document.querySelectorAll('dialog[open]').forEach(dl => dl.close());
+        document.getElementById('quit-word').textContent = quitWord();
+        const inp = document.getElementById('quit-input');
+        inp.value = '';
+        document.getElementById('quit-btn').disabled = true;
+        document.getElementById('dlg-quit').showModal();
+        inp.focus();
+        break;
+      }
+      case 'quit-confirm':
+        if (document.getElementById('quit-input').value.trim() !== quitWord()) return;
         S = fresh(); ui.tab = 'setup'; ui.view = null; ui.sel = null;
         el.closest('dialog').close();
-        commit();
+        commit(); window.scrollTo(0, 0);
         break;
 
       case 'format':
