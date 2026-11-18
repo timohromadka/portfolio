@@ -27,6 +27,30 @@
   const ui = { tab: loadUi().tab || 'setup', view: null, sel: null, focusAdd: false };
   let display = location.hash === '#display';
 
+  /* ---------- passcode ---------- */
+  // Only the SHA-256 hash of the passcode is stored here. Once entered, this browser stays unlocked.
+  const PASS_HASH = '63dcc4497e5877a79274ddb2d2b3f974c5e49066d6e533cf5099e3ba2973564a';
+  const LOCKKEY = 'chess_tournament.unlocked';
+  let unlocked = localStorage.getItem(LOCKKEY) === PASS_HASH;
+  let lockError = '';
+  async function sha256(text) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
+  }
+  function viewLock() {
+    return `
+      <header class="masthead"><div>
+        <h1>Chess<br>Tournament</h1>
+        <p class="issue">Private</p>
+        <p class="credits">Enter the passcode to continue</p>
+      </div></header>
+      <form class="lock" id="lockf" autocomplete="off">
+        <input type="password" id="pass" placeholder="Passcode" aria-label="Passcode">
+        <button class="btn solid" type="submit">Enter</button>
+      </form>
+      <p class="note lock-err">${esc(lockError)}</p>`;
+  }
+
   function save() {
     localStorage.setItem(KEY, JSON.stringify(S));
     localStorage.setItem(UIKEY, JSON.stringify({ tab: ui.tab }));
@@ -36,6 +60,7 @@
   // a second window (e.g. #display on a projector) follows along
   window.addEventListener('storage', e => {
     if (e.key === KEY) { S = load() || fresh(); ui.sel = null; render(); }
+    if (e.key === LOCKKEY) { unlocked = localStorage.getItem(LOCKKEY) === PASS_HASH; render(); }
   });
 
   /* ---------- helpers ---------- */
@@ -387,6 +412,13 @@
   const VIEWS = { setup: viewSetup, players: viewPlayers, round: viewRound, standings: viewStandings };
 
   function render() {
+    if (!unlocked) {
+      document.body.classList.remove('display');
+      document.title = 'Chess Tournament';
+      $app.innerHTML = viewLock();
+      document.getElementById('pass').focus();
+      return;
+    }
     if (ui.tab === 'round' && !started()) ui.tab = 'setup';
     document.body.classList.toggle('display', display);
     document.title = S.name || 'Chess Tournament';
@@ -599,6 +631,15 @@
   });
 
   document.addEventListener('submit', e => {
+    if (e.target.id === 'lockf') {
+      e.preventDefault();
+      sha256(document.getElementById('pass').value).then(h => {
+        if (h === PASS_HASH) { unlocked = true; lockError = ''; localStorage.setItem(LOCKKEY, h); }
+        else lockError = 'Wrong passcode.';
+        render();
+      });
+      return;
+    }
     if (e.target.id !== 'addf') return;
     e.preventDefault();
     const name = document.getElementById('pname').value.trim();
