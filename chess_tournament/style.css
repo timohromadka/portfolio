@@ -169,9 +169,15 @@ tr.out td { opacity: .45; }
 .player.pick { cursor: pointer; }
 .player.pick:hover { border-width: 3px; padding: 0 12.5px; }
 .player.sel { background: var(--ink); color: var(--paper); }
-.sq { flex: none; width: 14px; height: 14px; border: 1.5px solid var(--ink); background: var(--paper); }
-.sq.b { background: var(--ink); }
-.player.sel .sq { border-color: var(--paper); }
+.side { flex: none; display: inline-flex; align-items: center; gap: .3em; }
+.side.b { flex-direction: row-reverse; }
+.sq { flex: none; width: 1.5em; height: 1.5em; border: 2px solid var(--ink); background: var(--paper); }
+.side.b .sq { background: var(--ink); }
+.pawn { width: 2.1em; height: 2.1em; fill: var(--paper); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.side.b .pawn { fill: var(--ink); }
+.player.sel .sq, .player.sel .side.b .sq { border-color: var(--paper); }
+.player.sel .pawn { stroke: var(--paper); }
+.player.sel .side.w .pawn { fill: var(--paper); }
 .flag { font-size: 12px; font-weight: 500; opacity: .75; }
 
 .res { display: flex; gap: 3px; padding: 0 6px; }
@@ -237,7 +243,8 @@ body.display #app { max-width: none; padding: 4vh 4vw; }
   .board .res { padding: 4px 0; }
   .board .bye { grid-column: 2; }
   .player { min-height: 44px; }
-  .player.blk { justify-content: flex-start; text-align: left; flex-direction: row-reverse; }
+  .player.blk { justify-content: flex-end; text-align: left; flex-direction: row-reverse; }
+  .side.b { flex-direction: row; }
   .disp { grid-template-columns: 1fr; }
   .add { grid-template-columns: 1fr 80px; }
   .add .btn { grid-column: span 2; }

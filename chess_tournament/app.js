@@ -87,6 +87,10 @@
   const resLabel = code => (RES.find(r => r[0] === code) || [, ''])[1];
 
   const ICON_BOARD = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="10" height="10"/><rect x="12" y="12" width="10" height="10"/><path d="M12 2h10v10H12zM2 12h10v10H2z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+  // colour marker: a square plus a pawn, filled for black, outlined for white
+  const PAWN = '<svg class="pawn" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.6" r="3.4"/>' +
+    '<path d="M8.6 10.2h6.8l-1.3 2.2c0 3.2 1.4 5.2 3.2 6.6H6.7c1.8-1.4 3.2-3.4 3.2-6.6z"/><rect x="4.8" y="19" width="14.4" height="3.2" rx=".6"/></svg>';
+  const sideMark = side => `<span class="side ${side}" title="${side === 'w' ? 'White' : 'Black'}"><span class="sq"></span>${PAWN}</span>`;
   const ICON_ROOK = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 2h3.5v2.5h2.5V2h4v2.5h2.5V2H20v6l-3 2.5v7l2.5 2V22h-15v-2.5l2.5-2v-7L4 8z"/></svg>';
 
   /* ---------- masthead ---------- */
@@ -239,7 +243,7 @@
     const p = player(id);
     const h = hist[id];
     const meta = `${p.rating || 'unrated'} · ${pts(h ? h.score : 0) || '0'}`;
-    const sq = `<span class="sq ${side}"></span>`;
+    const sq = sideMark(side);
     const name = `<span class="pname">${esc(p.name)}</span>`;
     const m = `<span class="meta">${meta}</span>`;
     const flags = (p.withdrawn ? '<span class="flag">withdrawn</span>' : '') + (pick && pick.rematch ? '<span class="flag">rematch</span>' : '');
@@ -389,7 +393,7 @@
       const boards = r.pairings.map((pr, pi) => {
         const cell = (id, side) => {
           const p = player(id);
-          const sq = `<span class="sq ${side}"></span>`;
+          const sq = sideMark(side);
           const name = `<span class="pname">${esc(p.name)}</span>`;
           const m = `<span class="meta">${pts(hist[id].score) || '0'}</span>`;
           return `<div class="player ${side === 'b' ? 'blk' : ''}">${side === 'w' ? sq + name + m : m + name + sq}</div>`;
@@ -443,7 +447,7 @@
       <p><b>Saving.</b> Everything is saved in this browser as you go, so closing the page is safe.
       Use the file button to export a copy or move the tournament to another device.</p>
       <p><b>Display.</b> Shows the current pairings and standings for a screen or projector.
-      Open <a href="#display" target="_blank">this page with #display</a> in a second window and it updates as you enter results.</p>
+      Press Esc to switch it on and off. Open <a href="#display" target="_blank">this page with #display</a> in a second window and it updates as you enter results.</p>
       <div class="actions"><button class="btn solid" data-act="close">Close</button></div>
     </dialog>
     <dialog id="dlg-data">
@@ -519,9 +523,18 @@
     render();
   }
   window.addEventListener('hashchange', () => { if ((location.hash === '#display') !== display) setDisplay(!display); });
+  // Esc toggles the display view once the tournament has started.
+  // (An open dialog or a half-made swap takes the Esc first.)
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && display && !document.fullscreenElement) setDisplay(false);
-    if (e.key === 'Escape' && ui.sel) { ui.sel = null; render(); }
+    if (e.key !== 'Escape' || !unlocked || e.repeat) return;
+    if (document.querySelector('dialog[open]')) return;
+    if (ui.sel) { ui.sel = null; render(); return; }
+    if (display) setDisplay(false);
+    else if (started()) setDisplay(true);
+  });
+  // in full screen the browser keeps Esc for itself, so leaving full screen also leaves the display view
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && display) setDisplay(false);
   });
 
   document.addEventListener('click', e => {
