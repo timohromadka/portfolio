@@ -278,3 +278,20 @@ body.display #app { max-width: none; padding: 4vh 4vw; }
 .lock { display: flex; gap: 16px; align-items: end; max-width: 420px; margin-top: 96px; }
 .lock input { flex: 1; font-size: 20px; font-weight: 700; }
 .lock-err { margin-top: 14px; min-height: 1.4em; }
+
+/* ---------- tooltips ---------- */
+
+th[data-tip] { cursor: help; }
+th[data-tip]:hover { text-decoration: underline; text-underline-offset: 3px; }
+.tip {
+  position: fixed; z-index: 10; max-width: 280px; padding: 9px 12px;
+  background: var(--ink); color: var(--paper);
+  font-size: 13px; font-weight: 500; line-height: 1.4;
+  pointer-events: none; opacity: 0; transition: opacity .1s;
+}
+.tip.on { opacity: 1; }
+.tip::after {
+  content: ''; position: absolute; left: var(--ax, 50%); top: 100%; margin-left: -6px;
+  border: 6px solid transparent; border-top-color: var(--ink);
+}
+.tip.below::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--ink); }

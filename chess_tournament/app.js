@@ -338,6 +338,19 @@
     return `${rankOf[g.opp]}${g.color}${sym}${g.played ? '' : 'f'}`;
   }
 
+  // definitions shown when hovering a standings column heading
+  const TIPS = {
+    rank: 'Rank: ordered by points, then by the tiebreaks in the order set in Setup.',
+    pts: 'Points: win 1, draw ½, loss 0. Forfeit wins and byes count as shown in the round columns.',
+    elo: 'Elo: the rating entered at registration. Used for seeding and the performance rating.',
+    bh1: 'Buchholz Cut-1: Buchholz with the lowest single contribution left out, so one weak opponent counts less.',
+    bh: "Buchholz: the sum of all your opponents' scores. A round without a game counts as your own score.",
+    sb: "Sonneborn-Berger: the scores of the opponents you beat, plus half the scores of those you drew.",
+    win: 'Wins: games won over the board. Forfeit wins are not counted.',
+    perf: 'Performance rating: the rating your results suggest, from games played against rated opponents (FIDE method).',
+    round: n => `Round ${n}: opponent's current rank, your colour (w/b) and the result: + win, = draw, − loss, f forfeit, · not finished.`,
+  };
+
   function standingsTable(compact, state) {
     state = state || S;
     const rows = E.standings(state);
@@ -353,11 +366,12 @@
         </tbody></table>`;
     }
     let rh = '';
-    for (let i = 0; i < n; i++) rh += `<th>R${i + 1}</th>`;
+    for (let i = 0; i < n; i++) rh += `<th data-tip="${esc(TIPS.round(i + 1))}">R${i + 1}</th>`;
     return `<div class="scroll"><table>
-      <thead><tr><th>#</th><th>Name</th><th class="r pts">Pts</th><th class="r">Elo</th>
-        ${tbs.map(k => `<th class="r" title="${E.TIEBREAKS[k]}">${E.TB_SHORT[k]}</th>`).join('')}
-        <th class="r" title="Performance rating">Perf</th>${rh}</tr></thead>
+      <thead><tr><th data-tip="${TIPS.rank}">#</th><th>Name</th>
+        <th class="r pts" data-tip="${TIPS.pts}">Pts</th><th class="r" data-tip="${TIPS.elo}">Elo</th>
+        ${tbs.map(k => `<th class="r" data-tip="${esc(TIPS[k])}">${E.TB_SHORT[k]}</th>`).join('')}
+        <th class="r" data-tip="${TIPS.perf}">Perf</th>${rh}</tr></thead>
       <tbody>${rows.map(r => {
         let rc = '';
         for (let i = 0; i < n; i++) rc += `<td>${roundCell(r, i, rankOf)}</td>`;
@@ -380,7 +394,7 @@
     }
     return `
       <h2>${S.status === 'finished' ? 'Final standings' : 'Standings'}</h2>
-      <p class="note">${note} Round columns show opponent rank, colour and result (f = forfeit). Perf is the performance rating against rated opponents.</p>
+      <p class="note">${note} Hover over a column heading to see what it means.</p>
       ${standingsTable(false)}`;
   }
 
@@ -551,6 +565,29 @@
   quitInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('quit-btn').click();
   });
+
+  /* ---------- tooltips ---------- */
+
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  tip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tip);
+  function hideTip() { tip.classList.remove('on'); }
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tip]');
+    if (!el) { hideTip(); return; }
+    tip.textContent = el.dataset.tip;
+    tip.classList.add('on');
+    const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    const left = Math.max(8, Math.min(window.innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2));
+    let top = r.top - t.height - 10;
+    tip.classList.toggle('below', top < 8);
+    if (top < 8) top = r.bottom + 10;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+    tip.style.setProperty('--ax', (r.left + r.width / 2 - left) + 'px');
+  });
+  window.addEventListener('scroll', hideTip, true);
 
   /* ---------- actions ---------- */
 
