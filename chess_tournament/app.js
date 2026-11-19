@@ -25,7 +25,10 @@
 
   let S = load() || fresh();
   const ui = { tab: loadUi().tab || 'setup', view: null, sel: null, focusAdd: false };
-  let display = location.hash === '#display';
+  // #projector: a separate window meant for the projector / second screen. It always shows the
+  // display view and follows the main window live. #display: the display view in this window.
+  const projector = location.hash === '#projector';
+  let display = projector || location.hash === '#display';
 
   /* ---------- passcode ---------- */
   // Only the SHA-256 hash of the passcode is stored here. Once entered, this browser stays unlocked.
@@ -122,7 +125,7 @@
         </div>
         <div class="icons">
           <button class="icon help ht ht-3" data-act="help" title="How it works">?</button>
-          <button class="icon" data-act="display" title="Display view">${ICON_BOARD}</button>
+          <button class="icon" data-act="display" title="Open projector window">${ICON_BOARD}</button>
           <button class="icon outline" data-act="data" title="Tournament file">${ICON_ROOK}</button>
         </div>
       </header>`;
@@ -332,8 +335,9 @@
     return `${rankOf[g.opp]}${g.color}${sym}${g.played ? '' : 'f'}`;
   }
 
-  function standingsTable(compact) {
-    const rows = E.standings(S);
+  function standingsTable(compact, state) {
+    state = state || S;
+    const rows = E.standings(state);
     const tbs = S.tiebreaks.filter(t => t.on && t.k !== 'de').map(t => t.k);
     const n = S.rounds.filter(r => r.status !== 'pairing').length;
     const rankOf = {};
@@ -403,12 +407,23 @@
           <div class="dres">${pr.result ? resLabel(pr.result) : ''}</div>${cell(pr.b, 'b')}</div>`;
       }).join('');
       const title = S.status === 'finished' ? 'Final' : `Round ${ri + 1}`;
-      left = `<h1>${title}</h1><p class="issue">${esc(S.name || 'Chess Tournament')} · Time control ${tc()}</p>
+      const games = r.pairings.filter(p => p.b != null);
+      const doneN = games.filter(p => p.result).length;
+      const status = S.status === 'finished' ? '' : r.status === 'pairing' ? ' · Pairings' : ` · ${doneN} of ${games.length} results in`;
+      left = `<h1>${title}</h1><p class="issue">${esc(S.name || 'Chess Tournament')} · Time control ${tc()}${status}</p>
         <div class="boards">${boards}</div>`;
     }
-    return `<button class="btn small exit" data-act="exit">Exit display</button>
+    // standings only move when a round is submitted (Pair next round / Finish)
+    const submitted = S.rounds.filter(r => r.status === 'done');
+    const sub = Object.assign({}, S, { rounds: submitted });
+    const heading = S.status === 'finished' ? 'Final standings'
+      : submitted.length ? `Standings after round ${submitted.length}` : 'Players';
+    const corner = projector
+      ? (document.fullscreenElement ? '' : '<button class="btn small exit" data-act="fullscreen">Full screen</button>')
+      : '<button class="btn small exit" data-act="exit">Exit display</button>';
+    return `${corner}
       <div class="disp"><div>${left}</div>
-      <div>${started() ? `<h3>${S.status === 'finished' ? 'Final standings' : 'Standings'}</h3>${standingsTable(true)}` : ''}</div></div>`;
+      <div>${started() ? `<h3>${heading}</h3>${standingsTable(true, sub)}` : ''}</div></div>`;
   }
 
   /* ---------- render ---------- */
@@ -425,7 +440,7 @@
     }
     if (ui.tab === 'round' && !started()) ui.tab = 'setup';
     document.body.classList.toggle('display', display);
-    document.title = S.name || 'Chess Tournament';
+    document.title = (projector ? 'Projector · ' : '') + (S.name || 'Chess Tournament');
     $app.innerHTML = display ? viewDisplay() : masthead() + tabs() + `<main>${VIEWS[ui.tab]()}</main>`;
     if (ui.focusAdd) { const el = document.getElementById('pname'); if (el) el.focus(); ui.focusAdd = false; }
   }
@@ -447,7 +462,10 @@
       <p><b>Saving.</b> Everything is saved in this browser as you go, so closing the page is safe.
       Use the file button to export a copy or move the tournament to another device.</p>
       <p><b>Display.</b> Shows the current pairings and standings for a screen or projector.
-      Press Esc to switch it on and off. Open <a href="#display" target="_blank">this page with #display</a> in a second window and it updates as you enter results.</p>
+      With a projector as an extended screen, the display button opens a separate projector window: drag it to the
+      projector and click Full screen (or double-click it). It stays there and follows along as you add players and
+      enter results on your own screen; its standings update each time you submit a round.
+      On a single screen, Esc switches this window between the display and the normal view.</p>
       <div class="actions"><button class="btn solid" data-act="close">Close</button></div>
     </dialog>
     <dialog id="dlg-data">
@@ -533,6 +551,23 @@
 
   /* ---------- actions ---------- */
 
+  async function openProjector() {
+    const url = location.pathname + location.search + '#projector';
+    let features = 'popup,width=1280,height=800';
+    try {
+      // only when already allowed: waiting on a permission prompt would get the window blocked
+      const perm = window.getScreenDetails && await navigator.permissions.query({ name: 'window-management' });
+      if (perm && perm.state === 'granted') {
+        const d = await window.getScreenDetails();
+        const other = d.screens.find(sc => sc !== d.currentScreen);
+        if (other) features = `popup,left=${other.availLeft},top=${other.availTop},width=${other.availWidth},height=${other.availHeight}`;
+      }
+    } catch (err) { /* permission refused: open a normal window to drag across */ }
+    const w = window.open(url, 'chess_projector', features);
+    if (w) w.focus();
+    else setDisplay(true); // popup blocked: fall back to this window
+  }
+
   function setDisplay(on) {
     display = on;
     if (on) {
@@ -544,11 +579,11 @@
     }
     render();
   }
-  window.addEventListener('hashchange', () => { if ((location.hash === '#display') !== display) setDisplay(!display); });
+  window.addEventListener('hashchange', () => { if (!projector && (location.hash === '#display') !== display) setDisplay(!display); });
   // Esc toggles the display view once the tournament has started.
   // (An open dialog or a half-made swap takes the Esc first.)
   document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape' || !unlocked || e.repeat) return;
+    if (e.key !== 'Escape' || !unlocked || e.repeat || projector) return;
     if (document.querySelector('dialog[open]')) return;
     if (ui.sel) { ui.sel = null; render(); return; }
     if (display) setDisplay(false);
@@ -556,7 +591,14 @@
   });
   // in full screen the browser keeps Esc for itself, so leaving full screen also leaves the display view
   document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement && display) setDisplay(false);
+    if (projector) render(); // show or hide the Full screen button
+    else if (!document.fullscreenElement && display) setDisplay(false);
+  });
+  // in the projector window, double-click toggles full screen
+  document.addEventListener('dblclick', () => {
+    if (!projector || !unlocked) return;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else document.documentElement.requestFullscreen().catch(() => {});
   });
 
   document.addEventListener('click', e => {
@@ -570,7 +612,8 @@
       case 'help': document.getElementById('dlg-help').showModal(); break;
       case 'data': document.getElementById('dlg-data').showModal(); break;
       case 'close': el.closest('dialog').close(); break;
-      case 'display': setDisplay(true); break;
+      case 'display': openProjector(); break;
+      case 'fullscreen': document.documentElement.requestFullscreen().catch(() => {}); break;
       case 'exit': setDisplay(false); break;
       case 'export': exportFile(); break;
       case 'import': document.getElementById('file').click(); break;
