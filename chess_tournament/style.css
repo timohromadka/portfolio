@@ -108,6 +108,24 @@ input[type=text], input[type=number], input[type=password], select {
 input:focus, select:focus { border-bottom-width: 3px; padding-bottom: 2.5px; }
 input:disabled, select:disabled { opacity: .45; border-bottom-style: dotted; }
 input.num { width: 80px; }
+/* no browser spin arrows on any number field */
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.stepper { display: inline-flex; align-items: stretch; }
+.stepper input.num {
+  width: 52px; text-align: center; font-weight: 700; font-size: 17px;
+  border: 1.5px solid var(--ink); border-left: 0; border-right: 0; padding: 4px 0;
+}
+.stepper input.num:focus { border-bottom-width: 1.5px; padding-bottom: 4px; box-shadow: inset 0 -3px 0 var(--ink); }
+.step {
+  width: 34px; border: 1.5px solid var(--ink); background: transparent; padding: 0; cursor: pointer;
+  font-weight: 800; font-size: 18px; line-height: 1;
+}
+.step:hover { background: var(--ink); color: var(--paper); }
+.step:active { transform: translateY(1px); }
+.inline .stepper + .stepper { margin-left: 0; }
 .inline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .seg { display: inline-flex; }

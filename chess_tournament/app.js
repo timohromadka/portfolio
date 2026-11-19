@@ -139,6 +139,9 @@
 
   /* ---------- setup ---------- */
 
+  // number field with − / + buttons in place of the browser's spin arrows
+  const stepper = input => `<span class="stepper"><button type="button" class="step" data-act="step" data-d="-1" aria-label="Decrease">−</button>${input}<button type="button" class="step" data-act="step" data-d="1" aria-label="Increase">+</button></span>`;
+
   function viewSetup() {
     const n = S.players.length;
     const lock = started();
@@ -149,7 +152,7 @@
         <div class="hint">Everyone plays everyone once.</div>`;
     } else {
       const rec = n > 1 ? Math.ceil(Math.log2(n)) : null;
-      roundsField = `<input type="number" class="num" min="${minR}" max="99" value="${S.totalRounds}" data-f="totalRounds">
+      roundsField = `${stepper(`<input type="number" class="num" min="${minR}" max="99" value="${S.totalRounds}" data-f="totalRounds" aria-label="Rounds">`)}
         <div class="hint">${rec ? `${n} players: ${rec} rounds or more to find a clear winner.` : 'Usually 5 to 7.'}${lock ? ` At least ${minR} (already paired).` : ''}</div>`;
     }
     const seg = (act, opts, val, dis) => `<div class="seg">${opts.map(([v, l]) =>
@@ -173,9 +176,9 @@
       <div class="field"><label>Rounds</label><div>${roundsField}</div></div>
       <div class="field"><label>Time control</label>
         <div class="inline">
-          <input type="number" class="num" min="0" value="${S.base}" data-f="base"> min
+          ${stepper(`<input type="number" class="num" min="0" max="999" value="${S.base}" data-f="base" aria-label="Minutes">`)} min
           <span>+</span>
-          <input type="number" class="num" min="0" value="${S.inc}" data-f="inc"> s increment
+          ${stepper(`<input type="number" class="num" min="0" max="999" value="${S.inc}" data-f="inc" aria-label="Increment">`)} s increment
         </div></div>
       ${S.format === 'swiss' ? `<div class="field"><label>Bye</label>
         <div>${seg('bye', [[1, '1 point'], [0.5, '½ point'], [0, '0 points']], S.byePts)}
@@ -613,6 +616,15 @@
       case 'data': document.getElementById('dlg-data').showModal(); break;
       case 'close': el.closest('dialog').close(); break;
       case 'display': openProjector(); break;
+      case 'step': {
+        const inp = el.parentElement.querySelector('input');
+        const min = inp.min === '' ? -Infinity : Number(inp.min), max = inp.max === '' ? Infinity : Number(inp.max);
+        const v = Math.min(max, Math.max(min, (Number(inp.value) || 0) + Number(d.d)));
+        if (String(v) === inp.value) return;
+        inp.value = v;
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+        break;
+      }
       case 'fullscreen': document.documentElement.requestFullscreen().catch(() => {}); break;
       case 'exit': setDisplay(false); break;
       case 'export': exportFile(); break;
