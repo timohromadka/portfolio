@@ -21,7 +21,9 @@
 }
 
 /* ── cube ─────────────────────────────────────────────────── */
-.home-cube { --s: 140px; --fade: 1; }
+.home-cube { --s: 150px; --fade: 1; }
+.home-spill { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 0; }
+.home-cube { position: relative; z-index: 1; }
 .cube-stage { position: relative; width: calc(var(--s) * 3); height: calc(var(--s) * 3); }
 .cube-persp {
   position: absolute; inset: 0;

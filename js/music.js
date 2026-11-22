@@ -81,7 +81,7 @@ export function mountMusic(root) {
       el('section', { class: 'm-hero', 'data-sec': 'listen' },
         el('h1', { class: 'm-title' }, 'music', el('em', {}, ' & '), 'writing'),
         wave, four, player,
-        el('p', { class: 'm-caption' }, 'faint line: the exact Fourier series of the sound above · bold line: its seven strongest circles')),
+        el('p', { class: 'm-caption' }, 'top: the whole track · right: the slice under the playhead · the circles rebuild that slice — faint line with every frequency, bold line with only the seven strongest — and leave their trace drifting behind them')),
       el('section', { class: 'm-sec', 'data-sec': 'events' },
         el('h2', { class: 'reveal' }, el('span', {}, '01'), 'events'),
         el('ol', { class: 'm-timeline' }, sorted.map((e, i) => eventRow(e, i, today)))),
@@ -401,7 +401,10 @@ class Viz {
     const approx = terms.filter((q) => q.k <= 8).slice(0, APPROX);
     // scale so the approximation's circles always fill the height, loud or quiet
     const A = (H * 0.34) / Math.max(0.15, approx.reduce((sum, q) => sum + q.amp, 0));
-    const ox = W * (W > 900 * d ? 0.74 : 0.66), oy = H * 0.5;
+    const wide = W > 900 * d;
+    const ox = W * (wide ? 0.56 : 0.5), oy = H * 0.5;
+    // the slice panel: a zoomed-in plot of the bit of waveform being rebuilt
+    const bx = W * (wide ? 0.72 : 0.66), bw = W * 0.99 - bx, bt = H * 0.12, bh = H * 0.76;
     const tip = (list, tau, draw) => {
       let px = ox, py = oy;
       for (const q of list) {
@@ -456,9 +459,54 @@ class Viz {
     x.beginPath(); x.arc(ap[0], ap[1], 2.6 * d, 0, 7); x.fill();
     x.fillStyle = 'rgba(220,228,240,0.6)';
     x.beginPath(); x.arc(ex[0], ex[1], 1.6 * d, 0, 7); x.fill();
-    x.fillStyle = 'rgba(220,228,240,0.35)';
+    this.drawSlice(x, { terms, approx, A, oy, bx, bw, bt, bh, ap, W, H, d });
+  }
+
+  // The slice panel. Zoom lines lead down from the playhead on the full
+  // waveform; inside, the slice is plotted twice (every frequency = faint,
+  // strongest seven = bold) and a dashed line ties the circles' tip to the
+  // point it is drawing on that curve.
+  drawSlice(x, { terms, approx, A, oy, bx, bw, bt, bh, ap, W, H, d }) {
+    const px = (this.pos / this.duration) * W;
+    x.strokeStyle = 'rgba(220,228,240,0.16)';
+    x.lineWidth = d * 0.7;
+    x.beginPath(); x.moveTo(px, 0); x.lineTo(bx, bt); x.moveTo(px, 0); x.lineTo(bx + bw, bt); x.stroke();
+    x.fillStyle = 'rgba(8,9,11,0.82)';
+    x.fillRect(bx, bt, bw, bh);
+    x.strokeStyle = 'rgba(220,228,240,0.28)';
+    x.strokeRect(bx + 0.5, bt + 0.5, bw - 1, bh - 1);
+    x.strokeStyle = 'rgba(220,228,240,0.1)';
+    x.beginPath(); x.moveTo(bx, oy); x.lineTo(bx + bw, oy); x.stroke();
+    const curve = (list) => {
+      const out = [];
+      for (let i = 0; i <= 96; i++) {
+        const n = (i / 96) * N;
+        let v = 0;
+        for (const q of list) v += q.amp * Math.cos((2 * Math.PI * q.k * n) / N + q.ph);
+        out.push([bx + (i / 96) * bw, oy - v * A]);
+      }
+      return out;
+    };
+    x.save();
+    x.beginPath(); x.rect(bx, bt, bw, bh); x.clip();
+    const line = (pts) => { x.beginPath(); pts.forEach(([a, b], i) => (i ? x.lineTo(a, b) : x.moveTo(a, b))); x.stroke(); };
+    x.strokeStyle = 'rgba(220,228,240,0.5)'; x.lineWidth = d * 0.8; line(curve(terms));
+    x.strokeStyle = '#f4f6fa'; x.lineWidth = d * 2; x.shadowColor = 'rgba(255,255,255,0.6)'; x.shadowBlur = 6 * d; line(curve(approx));
+    x.restore();
+    // where the circles are on the slice right now
+    const u = (((this.tau % N) + N) % N) / N;
+    const mx = bx + u * bw, my = ap[1];
+    x.strokeStyle = 'rgba(220,228,240,0.25)';
+    x.beginPath(); x.moveTo(mx, bt); x.lineTo(mx, bt + bh); x.stroke();
+    x.setLineDash([3 * d, 4 * d]);
+    x.strokeStyle = 'rgba(240,244,250,0.55)';
+    x.beginPath(); x.moveTo(ap[0], ap[1]); x.lineTo(mx, my); x.stroke();
+    x.setLineDash([]);
+    x.fillStyle = '#fff';
+    x.beginPath(); x.arc(mx, my, 3 * d, 0, 7); x.fill();
+    x.fillStyle = 'rgba(220,228,240,0.55)';
     x.font = `${9 * d}px "Geist Mono", monospace`;
-    x.fillText(`exact · ${terms.length} terms`, 0, H - 26 * d);
-    x.fillText(`approx · ${APPROX} terms`, 0, H - 12 * d);
+    x.fillText(`slice of the waveform · ${Math.round((N * 8 / 44100) * 1000)} ms`, bx + 8 * d, bt + 16 * d);
+    x.fillText(`faint: all ${terms.length} frequencies   bold: strongest ${approx.length}`, bx + 8 * d, bt + bh - 10 * d);
   }
 }

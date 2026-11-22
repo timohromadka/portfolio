@@ -4,6 +4,7 @@
 // towards it and the whole cube takes on that side's pattern.
 
 import { FaceArt } from './faceArt.js';
+import { Spill } from './spill.js';
 import { el, lerp, clamp, reducedMotion } from './util.js';
 
 export const FACES = {
@@ -30,6 +31,7 @@ const SIDES = {
   bottom: { tf: 'rotateX(-90deg) translateZ(var(--h))',  n: [0, 1, 0],  home: 'dots' },
 };
 const GHOST = 0.16;
+const THEME_SIDE = { cs: 'left', music: 'front', play: 'top' };
 
 export class Cube {
   constructor(root, { onEnter }) {
@@ -47,6 +49,9 @@ export class Cube {
   }
 
   build() {
+    const spillCv = el('canvas', { class: 'home-spill', 'aria-hidden': 'true' });
+    this.root.append(spillCv);
+    this.spill = new Spill(spillCv);
     const stage = el('div', { class: 'cube-stage' });
     this.cubeEl = el('div', { class: 'cube' });
     stage.append(el('div', { class: 'cube-persp' }, this.cubeEl));
@@ -77,7 +82,7 @@ export class Cube {
   }
 
   measure() {
-    const s = Math.round(clamp(Math.min(innerWidth * 0.2, innerHeight * 0.155), 64, 160));
+    const s = Math.round(clamp(Math.min(innerWidth * 0.24, innerHeight * 0.172), 70, 210));
     this.s = s;
     this.root.style.setProperty('--s', `${s}px`);
   }
@@ -132,7 +137,7 @@ export class Cube {
     if (face === this.qFace) return;
     this.qFace = face;
     clearTimeout(this.qt);
-    this.qt = setTimeout(() => { this.qFace = undefined; this.setActive(face); }, face ? 90 : 320);
+    this.qt = setTimeout(() => { this.qFace = undefined; this.setActive(face); }, face ? 60 : 280);
   }
 
   // What a given face shows for the hovered side (`theme`).
@@ -149,10 +154,23 @@ export class Cube {
     this.active = theme;
     for (const [k, b] of Object.entries(this.labels)) b.classList.toggle('is-active', k === theme);
     this.root.dataset.active = theme || '';
+    // the change starts on the hovered side and runs over the cube from there:
+    // neighbours next (ink running down them), then the far side, bottom last
+    const src = theme ? this.faces.find((f) => f.name === THEME_SIDE[theme]) : null;
     for (const f of this.faces) {
-      f.art.show(this.styleFor(f, theme, prev), theme ? 1 : GHOST);
-      f.art.tilesT = theme ? 0.35 : 1;
+      let flow = { delay: 0, mode: 'radial' };
+      if (src) {
+        const dot = f.n[0] * src.n[0] + f.n[1] * src.n[1] + f.n[2] * src.n[2];
+        const side = f.n[1] === 0;
+        flow = dot > 0.5 ? { delay: 0, mode: theme === 'play' ? 'radial' : 'down' }
+          : dot < -0.5 ? { delay: 0.32, mode: side ? 'down' : 'radial' }
+          : { delay: 0.14, mode: side ? 'down' : 'radial' };
+        if (f.name === 'bottom') flow.delay += 0.18;
+      }
+      f.art.show(this.styleFor(f, theme, prev), theme ? 1 : GHOST, flow);
+      f.art.tilesT = theme ? 0.3 : 1;
     }
+    this.spill.setTheme(theme);
   }
 
   enter(face) {
@@ -197,7 +215,7 @@ export class Cube {
     const base = this.lockView || VIEW[this.active || 'idle'];
     const follow = this.lockView ? 0 : this.active ? 4 : 9;
     const bob = this.lockView || reducedMotion() ? 0 : Math.sin(t * 0.6) * 1.2;
-    const kr = 1 - Math.exp(-dt * (this.lockView ? 7 : 4));
+    const kr = 1 - Math.exp(-dt * (this.lockView ? 7 : 6.5));
     this.rot.rx = lerp(this.rot.rx, base.rx - this.mouse.y * follow + bob, kr);
     this.rot.ry = lerp(this.rot.ry, base.ry + this.mouse.x * follow, kr);
     this.scale = lerp(this.scale, this.scaleT, 1 - Math.exp(-dt * (this.scaleT > this.scale ? 3.2 : 5)));
@@ -214,5 +232,10 @@ export class Cube {
       f.node.style.opacity = (0.3 + 0.7 * clamp(nz * 1.6 + 0.15)).toFixed(3);
       f.art.update(dt);
     }
+    const rect = this.stage.getBoundingClientRect();
+    this.spill.frame(dt, {
+      half: this.s * 1.5, rx: rx, ry: ry, scale: this.scale, persp: this.s * 30, fade: this.fade,
+      cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2,
+    });
   }
 }

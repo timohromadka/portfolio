@@ -211,7 +211,103 @@ function makeSketch(seed) {
   return { strokes: S, dots, dotsDone: 0 };
 }
 
+// ── messy ink for the other styles ──────────────────────────
+// Every style also gets loose hand-made marks — dry-brush streaks, splatter,
+// threads, and long "spill" lines that start beyond one edge and run off
+// another, so the ink reads as continuing across the cube's edges.
+
+function makeInk(kind, seed) {
+  if (kind === 'graph') {
+    const sk = makeSketch(seed);
+    addSpill(sk, rng(seed + 5), kind);
+    return sk;
+  }
+  const R = rng(seed + 77);
+  const S = [], dots = [];
+  const add = (pts, o = {}) => S.push({ pts, w: 0.8, a: 0.85, dash: false, delay: 0, speed: 1, ...o });
+  const wobbly = (x0, y0, x1, y1, n, amp, f) => Array.from({ length: n + 1 }, (_, i) => {
+    const u = i / n, nx = -(y1 - y0), ny = x1 - x0, L = Math.hypot(nx, ny) || 1;
+    const o = Math.sin(u * f + seed) * amp + (R() - 0.5) * amp * 0.25;
+    return [x0 + (x1 - x0) * u + (nx / L) * o, y0 + (y1 - y0) * u + (ny / L) * o];
+  });
+  // a dry brush: several bristles side by side that run out at different lengths
+  const brush = (x0, y0, x1, y1, width, o) => {
+    const bristles = 4 + Math.floor(width * 1.5);
+    for (let b = 0; b < bristles; b++) {
+      const off = (b / bristles - 0.5) * width * 0.004;
+      const cut = 0.55 + R() * 0.45;
+      const pts = wobbly(x0, y0 + off, x0 + (x1 - x0) * cut, y0 + off + (y1 - y0) * cut, 30, 0.004, 3 + R() * 4);
+      add(pts, { w: 0.6 + R() * 1.6, a: 0.5 + R() * 0.45, ...o, delay: o.delay + R() * 0.15 });
+    }
+  };
+  const splat = (cx, cy, n, spread, col, delay, big = 3) => {
+    for (let i = 0; i < n; i++) {
+      const d = Math.pow(R(), 1.8) * spread, a = R() * 6.28;
+      dots.push({ x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, r: 0.4 + Math.pow(R(), 3) * big * 3, delay: delay + R() * 0.6, c: col, a: 0.55 + R() * 0.4 });
+    }
+  };
+
+  if (kind === 'notes') {
+    for (let i = 0; i < 12; i++) {
+      const y = STAVES[Math.floor(R() * STAVES.length)] + (R() - 0.5) * 0.05, x = 0.05 + R() * 0.6;
+      brush(x, y, x + 0.12 + R() * 0.35, y + (R() - 0.5) * 0.04, 2 + R() * 4, { delay: 0.1 + R() * 0.9, speed: 2.2 });
+    }
+    for (let i = 0; i < 7; i++) {
+      const x = 0.1 + R() * 0.8, y = 0.1 + R() * 0.6;
+      add(wobbly(x, y, x + (R() - 0.5) * 0.04, y + 0.08 + R() * 0.25, 20, 0.006, 5), { w: 1.2 + R() * 2.2, a: 0.8, delay: 0.3 + R(), speed: 2.5 });
+    }
+    for (let i = 0; i < 3; i++) {
+      const cx = 0.2 + R() * 0.6, cy = 0.2 + R() * 0.6, pts = [];
+      for (let k = 0; k <= 80; k++) { const t = k / 80 * Math.PI * 6, r = 0.01 + k / 80 * 0.05; pts.push([cx + Math.cos(t) * r + k * 0.002, cy + Math.sin(t) * r * 0.6]); }
+      add(pts, { w: 0.7, a: 0.7, delay: 0.6 + R() * 0.8, speed: 3 });
+    }
+    for (let i = 0; i < 4; i++) splat(0.1 + R() * 0.8, 0.1 + R() * 0.8, 30, 0.06, '18,18,18', 0.4 + R() * 0.8);
+  } else if (kind === 'dots') {
+    for (let i = 0; i < 7; i++) {
+      const y0 = R(), y1 = R();
+      add(wobbly(-0.05, y0, 1.05, y1, 60, 0.03 + R() * 0.05, 4 + R() * 8), { w: 0.5 + R() * 0.5, a: 0.6, delay: R() * 0.8, speed: 2.6 });
+    }
+    for (let i = 0; i < 9; i++) {
+      const col = hexToRgb(INK[Math.floor(R() * INK.length)]).join(',');
+      const cx = R(), cy = R();
+      dots.push({ x: cx, y: cy, r: 14 + R() * 30, delay: 0.2 + R() * 0.9, c: col, a: 0.16 });
+      splat(cx, cy, 16, 0.05, col, 0.4 + R() * 0.8, 2.4);
+    }
+    for (let i = 0; i < 3; i++) splat(R(), R(), 22, 0.07, '18,18,18', 0.5 + R(), 1.2);
+  } else if (kind === 'midi') {
+    for (let i = 0; i < 14; i++) {
+      const y = 0.08 + R() * 0.84, x0 = -0.05 + R() * 0.3;
+      add(wobbly(x0, y, x0 + 0.4 + R() * 0.7, y, 20, 0.0008, 3), { w: 0.4 + R() * 0.5, a: 0.55, dash: R() < 0.4, delay: R() * 0.8, speed: 3.5 });
+    }
+  }
+  const sk = { strokes: S, dots, dotsDone: 0 };
+  addSpill(sk, R, kind);
+  for (const s of S) { s.n = s.pts.length - 1; s.done = 0; }
+  return sk;
+}
+
+// long lines entering from beyond one edge and leaving another
+function addSpill(sk, R, kind) {
+  const n = kind === 'midi' ? 3 : 6;
+  for (let i = 0; i < n; i++) {
+    const side = Math.floor(R() * 4);
+    const a = [[R(), -0.1], [1.1, R()], [R(), 1.1], [-0.1, R()]][side];
+    const b = [[R(), 1.1], [-0.1, R()], [R(), -0.1], [1.1, R()]][side];
+    const pts = [];
+    const cx = 0.5 + (R() - 0.5) * 0.6, cy = 0.5 + (R() - 0.5) * 0.6;
+    for (let k = 0; k <= 60; k++) {
+      const u = k / 60, v = 1 - u;
+      pts.push([v * v * a[0] + 2 * v * u * cx + u * u * b[0] + (R() - 0.5) * 0.004, v * v * a[1] + 2 * v * u * cy + u * u * b[1] + (R() - 0.5) * 0.004]);
+    }
+    const s = { pts, w: kind === 'notes' ? 1 + R() * 2.4 : 0.5 + R() * 0.9, a: 0.55 + R() * 0.35, dash: kind === 'graph' && R() < 0.3, delay: R() * 0.5, speed: 3 };
+    s.n = pts.length - 1; s.done = 0;
+    sk.strokes.push(s);
+  }
+}
+
 // ── engine ──────────────────────────────────────────────────
+
+const TEMPO = 2.4; // overall speed of pen tracing
 
 export class FaceArt {
   constructor(px, canvas, seed = 1) {
@@ -219,9 +315,6 @@ export class FaceArt {
     this.canvas = canvas || document.createElement('canvas');
     this.canvas.width = this.canvas.height = px;
     this.ctx = this.canvas.getContext('2d');
-    this.ink = document.createElement('canvas');
-    this.ink.width = this.ink.height = px;
-    this.inkCtx = this.ink.getContext('2d');
     this.marks = [];
     this.links = [];
     this.layers = {};
@@ -232,6 +325,7 @@ export class FaceArt {
     this.seed = seed * 1009;
     this.t = 0;
     this.lastEvent = 0;
+    this.flow = { delay: 0, mode: 'radial' };
     for (let i = 0; i < N; i++) {
       const R = rng(seed * 7919 + i * 31 + 13);
       this.marks.push({
@@ -239,14 +333,29 @@ export class FaceArt {
         jit: Array.from({ length: SEG }, () => R() - 0.5),
         streaks: Array.from({ length: 4 }, () => [R() - 0.5, R()]),
         glyph: GLYPHS[Math.floor(R() * GLYPHS.length)],
-        seed: R() * 100, delay: R() * 0.5, startA: 0, startB: 0, respawn: 0,
+        seed: R() * 100, delay: R() * 0.25, startA: 0, startB: 0, respawn: 0,
       });
     }
   }
 
-  // Show `style` at opacity `alpha` (1 = lit, small = ghost). If the face
-  // is already showing something, it morphs from that.
-  show(style, alpha = 1) {
+  // extra delay for a point, so ink spreads across the face in a direction
+  off(x, y) {
+    const f = this.flow;
+    const d = f.mode === 'down' ? y * 0.45 : f.mode === 'up' ? (1 - y) * 0.45 : Math.hypot(x - 0.5, y - 0.5) * 0.6;
+    return f.delay + d;
+  }
+
+  // Show `style` at opacity `alpha` (1 = lit, small = ghost). If the face is
+  // already showing something, it morphs from that. `flow` = { delay, mode }
+  // sets when and in which direction the change sweeps over this face.
+  show(style, alpha = 1, flow = { delay: 0, mode: 'radial' }) {
+    this.flow = flow;
+    if (flow.delay > 0) { this.pending = { style, alpha, at: this.t + flow.delay }; return; }
+    this.pending = null;
+    this.apply(style, alpha);
+  }
+
+  apply(style, alpha) {
     this.alphaT = alpha;
     if (style === this.style) return;
     this.seed += 1;
@@ -254,6 +363,7 @@ export class FaceArt {
     this.extra = L1.extra;
     const visible = this.alpha > 0.01 && this.style;
     this.style = style;
+    this.flow = { ...this.flow, delay: 0 };
     if (visible) this.morph(L1);
     else this.fresh(L1);
   }
@@ -264,47 +374,52 @@ export class FaceArt {
       const p = L1.marks[i];
       Object.assign(m.cur, p, { a: 0, w: p.glitch ? 0 : p.w * 0.2, h: p.h * (p.glitch ? 1 : 0.2) });
       m.tgt = { ...p }; m.base = { ...p };
-      m.startA = m.startB = t + 0.2 + m.delay * 1.6;
+      m.startA = m.startB = t + this.off(p.x, p.y) + m.delay;
       m.respawn = 0;
     });
-    this.links = L1.links.map((l) => ({ ...l, prog: 0, alpha: 1, alphaT: 1, start: t + 0.6 + Math.random() * 1.6 }));
+    this.links = L1.links.map((l) => ({ ...l, prog: 0, alpha: 1, alphaT: 1, start: t + 0.25 + Math.random() * 0.5 }));
     this.layers = { [L1.layer]: this.newLayer(L1.layer) };
-    this.settleAt = t + 2.6;
+    this.settleAt = t + 1.2;
   }
 
   morph(L1) {
     const t = this.t;
     this.marks.forEach((m, i) => {
-      m.tgt = { ...L1.marks[i] }; m.base = { ...L1.marks[i] };
-      m.startA = t + m.delay * 0.6;
-      m.startB = t + 0.55 + m.delay;
+      const p = L1.marks[i];
+      m.tgt = { ...p }; m.base = { ...p };
+      const o = this.off(m.cur.x, m.cur.y);
+      m.startA = t + o + m.delay * 0.5;
+      m.startB = t + o + 0.22 + m.delay;
       m.respawn = 0;
     });
     for (const l of this.links) l.alphaT = 0;
-    for (const l of L1.links) this.links.push({ ...l, prog: 0, alpha: 1, alphaT: 1, start: t + 1.0 + Math.random() * 1.2 });
+    for (const l of L1.links) this.links.push({ ...l, prog: 0, alpha: 1, alphaT: 1, start: t + 0.35 + Math.random() * 0.5 });
     for (const k in this.layers) this.layers[k].alphaT = 0;
     this.layers[L1.layer] = this.newLayer(L1.layer);
-    this.settleAt = t + 2.8;
+    this.settleAt = t + 1.3;
   }
 
   newLayer(key) {
-    if (key === 'graph') {
-      this.sketch = makeSketch(this.seed);
-      this.sketchT0 = this.t;
-      this.inkCtx.clearRect(0, 0, this.S, this.S);
-    }
-    return { alpha: 1, alphaT: 1, prog: 0 };
+    const ink = document.createElement('canvas');
+    ink.width = ink.height = this.S;
+    const sk = makeInk(key, this.seed);
+    // stroke timing follows the flow direction
+    for (const s of sk.strokes) s.delay = s.delay * 0.4 + this.off(s.pts[0][0], s.pts[0][1]);
+    for (const d of sk.dots) d.delay = d.delay * 0.4 + this.off(d.x, d.y);
+    sk.dots.sort((p, q) => p.delay - q.delay);
+    return { alpha: 1, alphaT: 1, prog: 0, ink, inkCtx: ink.getContext('2d'), sk, t0: this.t };
   }
 
   update(dt) {
     this.t += dt;
     const t = this.t;
-    this.alpha += (this.alphaT - this.alpha) * (1 - Math.exp(-dt * (this.alphaT > this.alpha ? 5 : 2.5)));
-    this.tiles += (this.tilesT - this.tiles) * (1 - Math.exp(-dt * 3));
+    if (this.pending && t >= this.pending.at) { const p = this.pending; this.pending = null; this.apply(p.style, p.alpha); }
+    this.alpha += (this.alphaT - this.alpha) * (1 - Math.exp(-dt * (this.alphaT > this.alpha ? 9 : 4)));
+    this.tiles += (this.tilesT - this.tiles) * (1 - Math.exp(-dt * 5));
 
     if (this.settleAt && t > this.settleAt) this.ongoing(dt);
 
-    const k = 1 - Math.exp(-dt * 3.2);
+    const k = 1 - Math.exp(-dt * 7);
     for (const m of this.marks) {
       if (t >= m.startA) for (const p of PROPS_A) m.cur[p] += (m.tgt[p] - m.cur[p]) * k;
       if (t >= m.startB) for (const p of PROPS_B) m.cur[p] += (m.tgt[p] - m.cur[p]) * k;
@@ -318,43 +433,46 @@ export class FaceArt {
       }
     }
     for (const l of this.links) {
-      if (t >= l.start && l.prog < 1) l.prog = Math.min(1, l.prog + dt * 1.1);
-      l.alpha += (l.alphaT - l.alpha) * (1 - Math.exp(-dt * 4));
+      if (t >= l.start && l.prog < 1) l.prog = Math.min(1, l.prog + dt * 2.8);
+      l.alpha += (l.alphaT - l.alpha) * (1 - Math.exp(-dt * 7));
     }
     this.links = this.links.filter((l) => l.alpha > 0.01 || l.alphaT > 0);
     for (const key in this.layers) {
       const L = this.layers[key];
-      L.prog = Math.min(1, L.prog + dt * 0.55);
-      L.alpha += (L.alphaT - L.alpha) * (1 - Math.exp(-dt * 3));
-      if (L.alphaT === 0 && L.alpha < 0.01) delete this.layers[key];
+      L.prog = Math.min(1, L.prog + dt * 1.6);
+      L.alpha += (L.alphaT - L.alpha) * (1 - Math.exp(-dt * 5));
+      if (L.alphaT === 0 && L.alpha < 0.01) { delete this.layers[key]; continue; }
+      if (L.alphaT > 0) this.trace(L);
     }
-    if (this.layers.graph) this.traceSketch();
     this.draw();
   }
 
-  // advance the pens and commit newly drawn segments to the ink canvas
-  traceSketch() {
-    const sk = this.sketch, ctx = this.inkCtx, S = this.S;
-    if (!sk) return;
-    const el = this.t - this.sketchT0;
+  // advance the pens and commit newly drawn segments to the layer's ink canvas
+  trace(L) {
+    const sk = L.sk, ctx = L.inkCtx, S = this.S;
+    const el = this.t - L.t0;
     const lw = S / 620;
     ctx.lineCap = 'round';
     for (const s of sk.strokes) {
       if (s.done >= s.n || el < s.delay) continue;
-      const target = Math.min(s.n, Math.floor((el - s.delay) * s.speed * 34));
+      const target = Math.min(s.n, Math.floor((el - s.delay) * s.speed * 34 * TEMPO));
       if (target <= s.done) continue;
-      ctx.strokeStyle = `rgba(18,18,18,${s.a})`;
+      ctx.strokeStyle = `rgba(${s.c || '18,18,18'},${s.a})`;
       for (let i = s.done; i < target; i++) {
         if (s.dash && i % 4 > 1) continue;
         const [x0, y0] = s.pts[i], [x1, y1] = s.pts[i + 1];
-        ctx.lineWidth = lw * s.w * (0.75 + 0.5 * Math.abs(Math.sin(i * 1.7 + s.n)));
+        // pressure: thicker in the middle of a stroke, tapering at the ends
+        const taper = Math.sin(Math.PI * Math.min(1, (i + 0.5) / s.n)) * 0.6 + 0.4;
+        ctx.lineWidth = lw * s.w * taper * (0.75 + 0.5 * Math.abs(Math.sin(i * 1.7 + s.n)));
         ctx.beginPath(); ctx.moveTo(x0 * S, y0 * S); ctx.lineTo(x1 * S, y1 * S); ctx.stroke();
       }
       s.done = target;
     }
-    ctx.fillStyle = 'rgba(18,18,18,0.8)';
-    while (sk.dotsDone < sk.dots.length && sk.dots[sk.dotsDone].delay < el) {
-      const d = sk.dots[sk.dotsDone++];
+    while (sk.dotsDone < sk.dots.length) {
+      const d = sk.dots[sk.dotsDone];
+      if (d.delay > el) break;
+      sk.dotsDone++;
+      ctx.fillStyle = `rgba(${d.c || '18,18,18'},${d.a ?? 0.8})`;
       ctx.beginPath(); ctx.arc(d.x * S, d.y * S, d.r * lw, 0, 7); ctx.fill();
     }
   }
@@ -364,19 +482,19 @@ export class FaceArt {
     const t = this.t;
     const every = (s) => t - this.lastEvent > s && ((this.lastEvent = t), true);
     if (this.style === 'notes') {
-      if (every(0.42)) {
+      if (every(0.25)) {
         const m = this.marks[Math.floor(Math.random() * N)];
         m.tgt.a = 0; m.respawn = 1; m.startA = t;
       }
     } else if (this.style === 'midi') {
       for (const m of this.marks) {
-        m.tgt.x -= dt * (0.012 + (m.seed % 1) * 0.02);
+        m.tgt.x -= dt * (0.02 + (m.seed % 1) * 0.035);
         m.cur.x = m.tgt.x;
         if (m.tgt.x + m.tgt.w / 2 < 0.04) { m.tgt.x = m.cur.x = 0.96 + m.tgt.w / 2; m.cur.a = 0; }
         m.tgt.a = clamp(Math.min((m.tgt.x - m.tgt.w / 2 - 0.02) * 12, (0.98 - m.tgt.x + m.tgt.w / 2) * 12), 0, 1);
       }
     } else if (this.style === 'graph' && this.extra) {
-      if (every(0.35)) {
+      if (every(0.2)) {
         const { pairs } = this.extra;
         const [a, b] = pairs[Math.floor(Math.random() * pairs.length)];
         if (!this.links.some((l) => l.alphaT && l.a === a && l.b === b)) this.links.push({ a, b, kind: 'line', prog: 0, alpha: 1, alphaT: 1, start: t });
@@ -389,9 +507,9 @@ export class FaceArt {
       }
     } else if (this.style === 'dots') {
       for (const m of this.marks) if (m.base) {
-        m.tgt.x = m.base.x + Math.sin(t * 0.35 + m.seed) * 0.012;
-        m.tgt.y = m.base.y + Math.cos(t * 0.3 + m.seed * 1.3) * 0.012;
-        m.tgt.halo = m.base.halo ? 0.75 + 0.35 * Math.sin(t * 0.9 + m.seed) : 0;
+        m.tgt.x = m.base.x + Math.sin(t * 0.5 + m.seed) * 0.012;
+        m.tgt.y = m.base.y + Math.cos(t * 0.45 + m.seed * 1.3) * 0.012;
+        m.tgt.halo = m.base.halo ? 0.75 + 0.35 * Math.sin(t * 1.2 + m.seed) : 0;
       }
     }
   }
@@ -410,7 +528,6 @@ export class FaceArt {
     for (const m of this.marks) this.drawMark(m, lw);
     ctx.restore();
   }
-
   // the faint 3×3 floating stickers of a speedcube
   drawTiles() {
     const { ctx, S } = this;
@@ -446,9 +563,6 @@ export class FaceArt {
       for (let i = 0; i < N; i++) hline(0.1 + (i / (N - 1)) * 0.8, 0.04, 0.96, 0.06);
       ctx.strokeStyle = `rgba(20,20,20,${0.08 * A})`;
       for (let x = 0.1; x < 0.95; x += 0.1) { ctx.beginPath(); ctx.moveTo(x * S, 0.06 * S); ctx.lineTo(x * S, (0.06 + 0.88 * p) * S); ctx.stroke(); }
-    } else if (key === 'graph') {
-      ctx.globalAlpha *= A;
-      ctx.drawImage(this.ink, 0, 0);
     } else if (key === 'dots') {
       ctx.strokeStyle = `rgba(20,20,20,${0.12 * A})`;
       for (let k = 0; k < 4; k++) {
@@ -460,6 +574,7 @@ export class FaceArt {
         ctx.stroke();
       }
     }
+    if (L.ink) { ctx.globalAlpha *= A; ctx.drawImage(L.ink, 0, 0); }
     ctx.restore();
   }
 
