@@ -1,12 +1,13 @@
 // Procedural art drawn on one face of the landing cube.
 //
-// Every style is drawn with the same set of N "marks" (ink blobs, bars,
-// dots, nodes), plus links between marks and a background layer. Since
-// every style uses the same primitives, any style can morph into any other:
-//   notes  — inked, smeared notes on staves          (music face)
-//   midi   — crisp glitchy piano-roll bars            (cs face, when coming from music)
-//   graph  — blueprint lattice, nodes, traced edges   (cs face)
-//   dots   — colourful ink dots on wavy lines         (play face)
+// Every style is drawn with the same N "marks" (ink blobs, bars, dots,
+// nodes), links between marks, and a background layer. Since every style
+// uses the same primitives, a face can morph from whatever it currently
+// shows into any other style:
+//   notes  — inked, smeared notes on staves             (music)
+//   midi   — crisp glitchy piano-roll bars               (cs, coming from music)
+//   graph  — pen-traced ink sketch + leader-line graph   (cs)
+//   dots   — colourful ink dots on wavy lines            (projects & play)
 
 import { INK, hexToRgb, rng, clamp } from './util.js';
 
@@ -55,37 +56,27 @@ function layout(style, seed) {
   } else if (style === 'midi') {
     for (let i = 0; i < N; i++) L.marks.push(midiMark(R, i));
   } else if (style === 'graph') {
-    const d = 0.16, dy = d * Math.sin(Math.PI / 3);
-    const pts = [];
-    for (let row = 0; 0.12 + row * dy <= 0.9; row++) {
-      for (let col = 0; ; col++) {
-        const x = 0.1 + col * d + (row % 2 ? d / 2 : 0);
-        if (x > 0.9) break;
-        pts.push([x + (R() - 0.5) * 0.035, 0.12 + row * dy + (R() - 0.5) * 0.035]);
-      }
-    }
-    const nodes = Math.min(pts.length, N);
+    // a few hubs with leader lines radiating out to tiny black squares,
+    // circles and survey crosses — like an annotated site drawing
+    const H = 4;
+    const hubs = Array.from({ length: H }, () => [0.2 + R() * 0.6, 0.18 + R() * 0.64]);
     for (let i = 0; i < N; i++) {
-      if (i < nodes) {
-        const s = 0.012 + R() * 0.012;
-        L.marks.push(mark({ x: pts[i][0], y: pts[i][1], w: s, h: s, round: 1, hollow: 1, r: 24, g: 24, b: 24, a: 1 }));
-      } else {
-        L.marks.push(mark({ x: 0.06 + R() * 0.88, y: 0.06 + R() * 0.88, w: 0.012, h: 0.012, round: 0, cross: 1, r: 40, g: 40, b: 40, a: 0.7 }));
+      if (i < H) {
+        L.marks.push(mark({ x: hubs[i][0], y: hubs[i][1], w: 0.022, h: 0.022, round: 1, hollow: 1, r: 18, g: 18, b: 18 }));
+        continue;
       }
+      const h = hubs[i % H], ang = R() * Math.PI * 2, d = 0.08 + R() * 0.3;
+      const x = clamp(h[0] + Math.cos(ang) * d, 0.04, 0.96), y = clamp(h[1] + Math.sin(ang) * d, 0.04, 0.96);
+      const k = R();
+      if (k < 0.62) L.marks.push(mark({ x, y, w: 0.009 + R() * 0.007, h: 0.009 + R() * 0.007, round: 0, r: 14, g: 14, b: 14 }));
+      else if (k < 0.8) { const s = 0.008 + R() * 0.01; L.marks.push(mark({ x, y, w: s, h: s, round: 1, hollow: 1, r: 30, g: 30, b: 30, a: 0.85 })); }
+      else L.marks.push(mark({ x, y, w: 0.004, h: 0.004, round: 0, cross: 1, hollow: 1, r: 40, g: 40, b: 40, a: 0.75 }));
     }
     const pairs = [];
-    for (let i = 0; i < nodes; i++)
-      for (let j = i + 1; j < nodes; j++) {
-        const dd = Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]);
-        if (dd < d * 1.3) pairs.push([i, j]);
-      }
-    const has = (a, b) => pairs.some(([p, q]) => (p === a && q === b) || (p === b && q === a));
-    const tris = [];
-    for (const [i, j] of pairs)
-      for (let k = j + 1; k < nodes; k++) if (has(i, k) && has(j, k)) tris.push([i, j, k]);
-    L.links = pairs.filter(() => R() < 0.6).map(([a, b]) => ({ a, b, kind: 'line' }));
-    for (const t of tris) if (R() < 0.12) L.links.push({ tri: t, kind: 'hatch' });
-    L.extra = { pairs, tris };
+    for (let i = H; i < N; i++) pairs.push([i % H, i]);
+    for (let i = 0; i < H; i++) for (let j = i + 1; j < H; j++) pairs.push([i, j]);
+    L.links = pairs.filter(() => R() < 0.55).map(([a, b]) => ({ a, b, kind: 'line' }));
+    L.extra = { pairs };
   } else if (style === 'dots') {
     const curves = [0, 1, 2].map(() => ({ y: 0.2 + R() * 0.6, a1: 0.08 + R() * 0.12, f1: 2 + R() * 4, p1: R() * 6, a2: 0.03 + R() * 0.05, f2: 6 + R() * 6, p2: R() * 6, tilt: (R() - 0.5) * 0.5 }));
     const byCurve = [[], [], []];
@@ -107,26 +98,142 @@ function layout(style, seed) {
   return L;
 }
 
+// ── ink sketch (cs face) ────────────────────────────────────
+// A list of hand-drawn pen strokes, traced progressively onto a persistent
+// canvas: layered contours, hatching, a datum line with hatched teeth,
+// a dense diagonal "spine", construction and dashed lines, scribble texture.
+
+function makeSketch(seed) {
+  const R = rng(seed);
+  const S = [];
+  const add = (pts, o = {}) => S.push({ pts, w: 0.8, a: 0.85, dash: false, delay: 0, speed: 1, ...o });
+  const jit = (p, amt) => p.map(([x, y]) => [x + (R() - 0.5) * amt, y + (R() - 0.5) * amt]);
+  const line = (x0, y0, x1, y1, n = 24, wob = 0.002) => jit(Array.from({ length: n + 1 }, (_, i) => [x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n]), wob);
+  const bez = (p0, p1, p2, p3, n = 60) => Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n, u = 1 - t;
+    return [u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0], u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]];
+  });
+
+  // construction lines first — long, faint, ruled
+  for (let i = 0; i < 6; i++) {
+    const cx = R(), cy = R(), ang = R() * Math.PI;
+    add(line(cx - Math.cos(ang) * 1.4, cy - Math.sin(ang) * 1.4, cx + Math.cos(ang) * 1.4, cy + Math.sin(ang) * 1.4, 30, 0.0006), { w: 0.45, a: 0.3, delay: R() * 0.6, speed: 2.4 });
+  }
+  // datum line (double) with hatched teeth below it
+  const dy = 0.46 + R() * 0.12;
+  add(line(0.04, dy, 0.96, dy, 40, 0.0008), { w: 1.3, a: 0.95, delay: 0.3, speed: 1.6 });
+  add(line(0.04, dy + 0.006, 0.96, dy + 0.006, 40, 0.0008), { w: 0.5, a: 0.7, delay: 0.5, speed: 1.6 });
+  const tx0 = 0.5 + R() * 0.2;
+  for (let x = tx0; x < 0.94; x += 0.022) {
+    const h = 0.03 + R() * 0.09;
+    add(line(x, dy + 0.008, x - 0.012, dy + h, 6, 0.0012), { w: 0.55, a: 0.75, delay: 1.2 + (x - tx0) * 3, speed: 3 });
+  }
+  // organic contours, each traced 2–3 times slightly offset (sketchy)
+  const blobs = [];
+  for (let b = 0; b < 4; b++) {
+    const cx = 0.2 + R() * 0.6, cy = 0.2 + R() * 0.6, rx = 0.07 + R() * 0.16, ry = 0.05 + R() * 0.14, rot = R() * 3;
+    const p1 = R() * 6, p2 = R() * 6;
+    blobs.push({ cx, cy, rx, ry });
+    const passes = 2 + Math.floor(R() * 2);
+    for (let p = 0; p < passes; p++) {
+      const pts = [];
+      const o = (R() - 0.5) * 0.012;
+      for (let i = 0; i <= 70; i++) {
+        const t = (i / 70) * Math.PI * 2;
+        const k = 1 + 0.16 * Math.sin(3 * t + p1) + 0.07 * Math.sin(7 * t + p2) + o * 6;
+        const x = Math.cos(t) * rx * k, y = Math.sin(t) * ry * k;
+        pts.push([cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)]);
+      }
+      add(jit(pts, 0.0025), { w: 0.5 + R() * 0.5, a: 0.55 + R() * 0.35, delay: 0.8 + b * 0.5 + p * 0.25, speed: 0.9 + R() * 0.4 });
+    }
+    // contour rings inside some blobs
+    if (R() < 0.6) for (let ring = 1; ring <= 3; ring++) {
+      const s = 1 - ring * 0.22, pts = [];
+      for (let i = 0; i <= 50; i++) {
+        const t = (i / 50) * Math.PI * 2;
+        const k = 1 + 0.16 * Math.sin(3 * t + p1);
+        const x = Math.cos(t) * rx * k * s, y = Math.sin(t) * ry * k * s;
+        pts.push([cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)]);
+      }
+      add(jit(pts, 0.002), { w: 0.4, a: 0.45, dash: ring === 2, delay: 2 + b * 0.4 + ring * 0.2, speed: 1.4 });
+    }
+  }
+  // hatching patches (fine parallel strokes within an ellipse)
+  for (let hz = 0; hz < 4; hz++) {
+    const b = blobs[hz % blobs.length];
+    const cx = b.cx + (R() - 0.5) * b.rx, cy = b.cy + (R() - 0.5) * b.ry;
+    const r = 0.03 + R() * 0.06, ang = R() < 0.5 ? Math.PI / 4 : -Math.PI / 3, step = 0.0065;
+    const dx = Math.cos(ang), dyy = Math.sin(ang);
+    for (let d = -r; d <= r; d += step) {
+      const half = Math.sqrt(Math.max(0, r * r - d * d)) * (0.75 + R() * 0.3);
+      const mx = cx - dyy * d, my = cy + dx * d;
+      add(line(mx - dx * half, my - dyy * half, mx + dx * half, my + dyy * half, 4, 0.0012), { w: 0.4, a: 0.65, delay: 2.6 + hz * 0.5 + (d + r) * 4, speed: 4 });
+    }
+  }
+  // the dense diagonal spine: a bundle of nearly parallel strokes
+  const a0 = [0.12 + R() * 0.2, 0.08 + R() * 0.2], a3 = [0.55 + R() * 0.3, 0.6 + R() * 0.3];
+  const a1 = [a0[0] + 0.25, a0[1] + 0.05 + R() * 0.2], a2 = [a3[0] - 0.2, a3[1] - 0.3];
+  for (let k = 0; k < 16; k++) {
+    const off = (R() - 0.5) * 0.03 * (k < 6 ? 0.35 : 1);
+    const pts = bez([a0[0] + off, a0[1] - off], [a1[0] + off, a1[1]], [a2[0], a2[1] + off], [a3[0] - off, a3[1] + off], 70);
+    add(jit(pts, 0.0022), { w: k < 5 ? 1.1 : 0.45, a: k < 5 ? 0.9 : 0.55, delay: 1.6 + k * 0.12, speed: 0.8 + R() * 0.3 });
+  }
+  // dashed survey curves
+  for (let i = 0; i < 3; i++) {
+    const p0 = [R(), R()], p3 = [R(), R()];
+    add(bez(p0, [R(), R()], [R(), R()], p3, 50), { w: 0.5, a: 0.6, dash: true, delay: 3 + i * 0.4, speed: 1.2 });
+  }
+  // a large dashed arc
+  const ac = [0.3 + R() * 0.4, 0.4 + R() * 0.3], ar = 0.25 + R() * 0.12;
+  add(Array.from({ length: 61 }, (_, i) => { const t = Math.PI * (0.8 + i / 60 * 1.3); return [ac[0] + Math.cos(t) * ar, ac[1] + Math.sin(t) * ar]; }), { w: 0.5, a: 0.45, dash: true, delay: 1, speed: 1.2 });
+  // small circles, some with a centre cross
+  for (let i = 0; i < 9; i++) {
+    const cx = 0.08 + R() * 0.84, cy = 0.08 + R() * 0.84, r = 0.004 + R() * 0.014;
+    add(Array.from({ length: 25 }, (_, j) => [cx + Math.cos((j / 24) * Math.PI * 2) * r, cy + Math.sin((j / 24) * Math.PI * 2) * r]), { w: 0.6, a: 0.85, delay: 3.5 + R() * 2, speed: 3 });
+    if (R() < 0.5) { add(line(cx - r * 1.8, cy, cx + r * 1.8, cy, 2, 0), { w: 0.5, delay: 4 + R() * 2, speed: 5 }); add(line(cx, cy - r * 1.8, cx, cy + r * 1.8, 2, 0), { w: 0.5, delay: 4 + R() * 2, speed: 5 }); }
+  }
+  // scribble texture clusters
+  for (let c = 0; c < 4; c++) {
+    const b = blobs[c % blobs.length];
+    const cx = b.cx + (R() - 0.5) * b.rx * 1.2, cy = b.cy + (R() - 0.5) * b.ry * 1.2;
+    for (let i = 0; i < 46; i++) {
+      const x = cx + (R() + R() - 1) * 0.07, y = cy + (R() + R() - 1) * 0.06, ang = R() * Math.PI, len = 0.004 + R() * 0.02;
+      add(line(x, y, x + Math.cos(ang) * len, y + Math.sin(ang) * len, 3, 0.001), { w: 0.4 + R() * 0.6, a: 0.5 + R() * 0.4, delay: 3.2 + c * 0.6 + R() * 2.5, speed: 6 });
+    }
+  }
+  // stipple dots
+  const dots = [];
+  for (let c = 0; c < 3; c++) {
+    const cx = 0.15 + R() * 0.7, cy = 0.15 + R() * 0.7;
+    for (let i = 0; i < 70; i++) dots.push({ x: cx + (R() + R() - 1) * 0.09, y: cy + (R() + R() - 1) * 0.07, r: 0.4 + R() * 1.1, delay: 4 + c * 0.7 + R() * 2.5 });
+  }
+  for (const s of S) { s.n = s.pts.length - 1; s.done = 0; s.prog = 0; }
+  return { strokes: S, dots, dotsDone: 0 };
+}
+
 // ── engine ──────────────────────────────────────────────────
 
 export class FaceArt {
-  constructor(px) {
+  constructor(px, canvas, seed = 1) {
     this.S = px;
-    this.canvas = document.createElement('canvas');
+    this.canvas = canvas || document.createElement('canvas');
     this.canvas.width = this.canvas.height = px;
     this.ctx = this.canvas.getContext('2d');
+    this.ink = document.createElement('canvas');
+    this.ink.width = this.ink.height = px;
+    this.inkCtx = this.ink.getContext('2d');
     this.marks = [];
     this.links = [];
     this.layers = {};
     this.style = null;
     this.alpha = 0;
     this.alphaT = 0;
-    this.active = false;
-    this.dirty = true;
-    this.seed = Math.floor(Math.random() * 1e6);
+    this.tiles = 1; this.tilesT = 1;
+    this.seed = seed * 1009;
     this.t = 0;
+    this.lastEvent = 0;
     for (let i = 0; i < N; i++) {
-      const R = rng(i * 7919 + 13);
+      const R = rng(seed * 7919 + i * 31 + 13);
       this.marks.push({
         cur: mark({ a: 0 }), tgt: mark({ a: 0 }), base: null,
         jit: Array.from({ length: SEG }, () => R() - 0.5),
@@ -137,81 +244,65 @@ export class FaceArt {
     }
   }
 
-  get visible() { return this.alpha > 0.004 || this.active; }
-
-  // Show `style`, morphing from `from` (a style name) when given.
-  enter(style, from = null) {
-    const t = this.t;
-    this.active = true;
-    this.alphaT = 1;
+  // Show `style` at opacity `alpha` (1 = lit, small = ghost). If the face
+  // is already showing something, it morphs from that.
+  show(style, alpha = 1) {
+    this.alphaT = alpha;
+    if (style === this.style) return;
     this.seed += 1;
     const L1 = layout(style, this.seed);
     this.extra = L1.extra;
+    const visible = this.alpha > 0.01 && this.style;
     this.style = style;
-    this.lastEvent = t;
-
-    if (from && from !== style) {
-      const L0 = layout(from, this.seed + 999);
-      // start from the source picture (faded in quickly), then morph
-      this.marks.forEach((m, i) => {
-        Object.assign(m.cur, L0.marks[i], { a: 0 });
-        m.tgt = { ...L0.marks[i] };
-        m.startA = m.startB = t;
-        m.respawn = 0;
-      });
-      this.links = L0.links.map((l) => ({ ...l, prog: 1, alpha: 1, alphaT: 1, start: t }));
-      this.layers = { [L0.layer]: { alpha: 1, alphaT: 1, prog: 1 } };
-      this.alpha = Math.max(this.alpha, 0.6);
-      this.pending = { L1, at: t + 0.45 };
-    } else {
-      this.marks.forEach((m, i) => {
-        const p = L1.marks[i];
-        Object.assign(m.cur, p, { a: 0, w: p.glitch ? 0 : p.w * 0.2, h: p.h * (p.glitch ? 1 : 0.2) });
-        m.tgt = { ...p };
-        m.base = { ...p };
-        m.startA = m.startB = t + 0.25 + m.delay * 1.6;
-        m.respawn = 0;
-      });
-      this.links = L1.links.map((l) => ({ ...l, prog: 0, alpha: 1, alphaT: 1, start: t + 0.6 + Math.random() * 1.6 }));
-      this.layers = { [L1.layer]: { alpha: 1, alphaT: 1, prog: 0 } };
-      this.pending = null;
-      this.settleAt = t + 2.6;
-    }
-    this.dirty = true;
+    if (visible) this.morph(L1);
+    else this.fresh(L1);
   }
 
-  applyMorph(L1) {
+  fresh(L1) {
     const t = this.t;
     this.marks.forEach((m, i) => {
-      m.tgt = { ...L1.marks[i] };
-      m.base = { ...L1.marks[i] };
+      const p = L1.marks[i];
+      Object.assign(m.cur, p, { a: 0, w: p.glitch ? 0 : p.w * 0.2, h: p.h * (p.glitch ? 1 : 0.2) });
+      m.tgt = { ...p }; m.base = { ...p };
+      m.startA = m.startB = t + 0.2 + m.delay * 1.6;
+      m.respawn = 0;
+    });
+    this.links = L1.links.map((l) => ({ ...l, prog: 0, alpha: 1, alphaT: 1, start: t + 0.6 + Math.random() * 1.6 }));
+    this.layers = { [L1.layer]: this.newLayer(L1.layer) };
+    this.settleAt = t + 2.6;
+  }
+
+  morph(L1) {
+    const t = this.t;
+    this.marks.forEach((m, i) => {
+      m.tgt = { ...L1.marks[i] }; m.base = { ...L1.marks[i] };
       m.startA = t + m.delay * 0.6;
-      m.startB = t + 0.6 + m.delay;
+      m.startB = t + 0.55 + m.delay;
+      m.respawn = 0;
     });
     for (const l of this.links) l.alphaT = 0;
     for (const l of L1.links) this.links.push({ ...l, prog: 0, alpha: 1, alphaT: 1, start: t + 1.0 + Math.random() * 1.2 });
     for (const k in this.layers) this.layers[k].alphaT = 0;
-    this.layers[L1.layer] = { alpha: 1, alphaT: 1, prog: 0 };
+    this.layers[L1.layer] = this.newLayer(L1.layer);
     this.settleAt = t + 2.8;
   }
 
-  leave() {
-    this.active = false;
-    this.alphaT = 0;
-    this.pending = null;
+  newLayer(key) {
+    if (key === 'graph') {
+      this.sketch = makeSketch(this.seed);
+      this.sketchT0 = this.t;
+      this.inkCtx.clearRect(0, 0, this.S, this.S);
+    }
+    return { alpha: 1, alphaT: 1, prog: 0 };
   }
 
   update(dt) {
     this.t += dt;
     const t = this.t;
-    this.alpha += (this.alphaT - this.alpha) * (1 - Math.exp(-dt * (this.alphaT > this.alpha ? 6 : 3)));
-    if (!this.visible) { if (this.dirty) { this.ctx.clearRect(0, 0, this.S, this.S); this.dirty = false; } return false; }
+    this.alpha += (this.alphaT - this.alpha) * (1 - Math.exp(-dt * (this.alphaT > this.alpha ? 5 : 2.5)));
+    this.tiles += (this.tilesT - this.tiles) * (1 - Math.exp(-dt * 3));
 
-    if (this.pending && t >= this.pending.at) { this.applyMorph(this.pending.L1); this.pending = null; }
-    // fade the source picture in quickly while waiting for the morph
-    if (this.pending) for (const m of this.marks) if (m.cur.a < m.tgt.a) m.cur.a = Math.min(m.tgt.a, m.cur.a + dt * 4);
-
-    if (this.active && this.settleAt && t > this.settleAt) this.ongoing(dt);
+    if (this.settleAt && t > this.settleAt) this.ongoing(dt);
 
     const k = 1 - Math.exp(-dt * 3.2);
     for (const m of this.marks) {
@@ -237,9 +328,35 @@ export class FaceArt {
       L.alpha += (L.alphaT - L.alpha) * (1 - Math.exp(-dt * 3));
       if (L.alphaT === 0 && L.alpha < 0.01) delete this.layers[key];
     }
+    if (this.layers.graph) this.traceSketch();
     this.draw();
-    this.dirty = true;
-    return true;
+  }
+
+  // advance the pens and commit newly drawn segments to the ink canvas
+  traceSketch() {
+    const sk = this.sketch, ctx = this.inkCtx, S = this.S;
+    if (!sk) return;
+    const el = this.t - this.sketchT0;
+    const lw = S / 620;
+    ctx.lineCap = 'round';
+    for (const s of sk.strokes) {
+      if (s.done >= s.n || el < s.delay) continue;
+      const target = Math.min(s.n, Math.floor((el - s.delay) * s.speed * 34));
+      if (target <= s.done) continue;
+      ctx.strokeStyle = `rgba(18,18,18,${s.a})`;
+      for (let i = s.done; i < target; i++) {
+        if (s.dash && i % 4 > 1) continue;
+        const [x0, y0] = s.pts[i], [x1, y1] = s.pts[i + 1];
+        ctx.lineWidth = lw * s.w * (0.75 + 0.5 * Math.abs(Math.sin(i * 1.7 + s.n)));
+        ctx.beginPath(); ctx.moveTo(x0 * S, y0 * S); ctx.lineTo(x1 * S, y1 * S); ctx.stroke();
+      }
+      s.done = target;
+    }
+    ctx.fillStyle = 'rgba(18,18,18,0.8)';
+    while (sk.dotsDone < sk.dots.length && sk.dots[sk.dotsDone].delay < el) {
+      const d = sk.dots[sk.dotsDone++];
+      ctx.beginPath(); ctx.arc(d.x * S, d.y * S, d.r * lw, 0, 7); ctx.fill();
+    }
   }
 
   // Continuous behaviour once a style has settled.
@@ -255,27 +372,20 @@ export class FaceArt {
       for (const m of this.marks) {
         m.tgt.x -= dt * (0.012 + (m.seed % 1) * 0.02);
         m.cur.x = m.tgt.x;
-        if (m.tgt.x + m.tgt.w / 2 < 0.04) {
-          m.tgt.x = m.cur.x = 0.96 + m.tgt.w / 2;
-          m.cur.a = 0;
-        }
+        if (m.tgt.x + m.tgt.w / 2 < 0.04) { m.tgt.x = m.cur.x = 0.96 + m.tgt.w / 2; m.cur.a = 0; }
         m.tgt.a = clamp(Math.min((m.tgt.x - m.tgt.w / 2 - 0.02) * 12, (0.98 - m.tgt.x + m.tgt.w / 2) * 12), 0, 1);
       }
     } else if (this.style === 'graph' && this.extra) {
-      if (every(0.3)) {
-        const { pairs, tris } = this.extra;
-        if (Math.random() < 0.78) {
-          const [a, b] = pairs[Math.floor(Math.random() * pairs.length)];
-          if (!this.links.some((l) => l.alphaT && l.a === a && l.b === b)) this.links.push({ a, b, kind: 'line', prog: 0, alpha: 1, alphaT: 1, start: t });
-        } else if (tris.length) {
-          this.links.push({ tri: tris[Math.floor(Math.random() * tris.length)], kind: 'hatch', prog: 0, alpha: 1, alphaT: 1, start: t });
-        }
+      if (every(0.35)) {
+        const { pairs } = this.extra;
+        const [a, b] = pairs[Math.floor(Math.random() * pairs.length)];
+        if (!this.links.some((l) => l.alphaT && l.a === a && l.b === b)) this.links.push({ a, b, kind: 'line', prog: 0, alpha: 1, alphaT: 1, start: t });
         const live = this.links.filter((l) => l.alphaT > 0);
-        if (live.length > 70) live[0].alphaT = 0;
+        if (live.length > 40) live[0].alphaT = 0;
       }
       for (const m of this.marks) if (m.base) {
-        m.tgt.x = m.base.x + Math.sin(t * 0.5 + m.seed) * 0.004;
-        m.tgt.y = m.base.y + Math.cos(t * 0.4 + m.seed) * 0.004;
+        m.tgt.x = m.base.x + Math.sin(t * 0.5 + m.seed) * 0.003;
+        m.tgt.y = m.base.y + Math.cos(t * 0.4 + m.seed) * 0.003;
       }
     } else if (this.style === 'dots') {
       for (const m of this.marks) if (m.base) {
@@ -291,12 +401,32 @@ export class FaceArt {
   draw() {
     const { ctx, S } = this;
     ctx.clearRect(0, 0, S, S);
+    this.drawTiles();
     ctx.save();
     ctx.globalAlpha = clamp(this.alpha);
     const lw = S / 620;
     for (const key in this.layers) this.drawLayer(key, this.layers[key], lw);
     for (const l of this.links) this.drawLink(l, lw);
     for (const m of this.marks) this.drawMark(m, lw);
+    ctx.restore();
+  }
+
+  // the faint 3×3 floating stickers of a speedcube
+  drawTiles() {
+    const { ctx, S } = this;
+    const a = this.tiles;
+    if (a < 0.01) return;
+    const c = S / 3, pad = c * 0.07, r = c * 0.1;
+    ctx.save();
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      ctx.beginPath();
+      ctx.roundRect(i * c + pad, j * c + pad, c - pad * 2, c - pad * 2, r);
+      ctx.fillStyle = `rgba(20,20,20,${0.016 * a})`;
+      ctx.fill();
+      ctx.lineWidth = S / 900;
+      ctx.strokeStyle = `rgba(20,20,20,${0.055 * a})`;
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -317,20 +447,8 @@ export class FaceArt {
       ctx.strokeStyle = `rgba(20,20,20,${0.08 * A})`;
       for (let x = 0.1; x < 0.95; x += 0.1) { ctx.beginPath(); ctx.moveTo(x * S, 0.06 * S); ctx.lineTo(x * S, (0.06 + 0.88 * p) * S); ctx.stroke(); }
     } else if (key === 'graph') {
-      ctx.strokeStyle = `rgba(20,20,20,${0.05 * A})`;
-      for (let i = 1; i < 24; i++) {
-        const v = i / 24;
-        ctx.beginPath(); ctx.moveTo(v * S, 0); ctx.lineTo(v * S, p * S); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, v * S); ctx.lineTo(p * S, v * S); ctx.stroke();
-      }
-      ctx.lineWidth = lw * 1.6;
-      hline(0.555, 0.04, 0.96, 0.55);
-      ctx.lineWidth = lw * 0.8;
-      ctx.strokeStyle = `rgba(20,20,20,${0.28 * A})`;
-      ctx.setLineDash([4 * lw, 4 * lw]);
-      ctx.beginPath(); ctx.arc(0.42 * S, 0.62 * S, 0.27 * S, Math.PI * 0.9, Math.PI * (0.9 + 1.4 * p)); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(0.08 * S, 0.9 * S); ctx.lineTo((0.08 + 0.8 * p) * S, (0.9 - 0.75 * p) * S); ctx.stroke();
+      ctx.globalAlpha *= A;
+      ctx.drawImage(this.ink, 0, 0);
     } else if (key === 'dots') {
       ctx.strokeStyle = `rgba(20,20,20,${0.12 * A})`;
       for (let k = 0; k < 4; k++) {
@@ -349,23 +467,9 @@ export class FaceArt {
     const { ctx, S } = this;
     if (l.prog <= 0 || l.alpha < 0.01) return;
     const A = l.alpha;
-    if (l.kind === 'hatch') {
-      const [i, j, k] = l.tri.map((n) => this.marks[n].cur);
-      ctx.save();
-      ctx.beginPath(); ctx.moveTo(i.x * S, i.y * S); ctx.lineTo(j.x * S, j.y * S); ctx.lineTo(k.x * S, k.y * S); ctx.closePath();
-      ctx.clip();
-      ctx.strokeStyle = `rgba(20,20,20,${0.45 * A})`;
-      ctx.lineWidth = lw * 0.8;
-      const step = 5 * lw, n = Math.floor((S * 2 * l.prog) / step);
-      ctx.beginPath();
-      for (let q = 0; q < n; q++) { const o = q * step - S * 0.2; ctx.moveTo(o, 0); ctx.lineTo(o - S, S); }
-      ctx.stroke();
-      ctx.restore();
-      return;
-    }
     const a = this.marks[l.a].cur, b = this.marks[l.b].cur;
-    ctx.strokeStyle = `rgba(20,20,20,${(l.kind === 'wavy' ? 0.55 : 0.6) * A})`;
-    ctx.lineWidth = lw * (l.kind === 'wavy' ? 0.9 : 0.75);
+    ctx.strokeStyle = `rgba(20,20,20,${(l.kind === 'wavy' ? 0.55 : 0.5) * A})`;
+    ctx.lineWidth = lw * (l.kind === 'wavy' ? 0.9 : 0.6);
     ctx.beginPath();
     if (l.kind === 'wavy') {
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
@@ -424,11 +528,9 @@ export class FaceArt {
 
     this.shapePath(c, m.jit);
     if (c.hollow > 0.01) {
-      ctx.fillStyle = `rgba(255,255,255,${c.a * c.hollow})`;
-      ctx.fill();
       ctx.fillStyle = col(c.a * (1 - c.hollow));
       ctx.fill();
-      ctx.lineWidth = lw * 1.1;
+      ctx.lineWidth = lw * 0.9;
       ctx.strokeStyle = col(c.a * c.hollow);
       ctx.stroke();
     } else {
@@ -436,7 +538,6 @@ export class FaceArt {
       ctx.fill();
     }
 
-    // little dark centre ring on coloured ink dots
     if (c.halo > 0.05 && c.w > 0.02) {
       ctx.beginPath();
       ctx.arc(c.x * S, c.y * S, (c.w * S) * 0.18, 0, 7);
@@ -445,7 +546,6 @@ export class FaceArt {
       ctx.stroke();
     }
 
-    // dry-brush streaks on ink notes
     if (c.rough > 0.05 && c.w > c.h) {
       ctx.strokeStyle = col(0.55 * c.rough * c.a);
       ctx.lineWidth = lw * 0.9;
@@ -460,15 +560,14 @@ export class FaceArt {
 
     if (c.cross > 0.01) {
       const r = Math.max(c.w, 0.01) * S * 0.9;
-      ctx.strokeStyle = col(c.cross * c.a);
-      ctx.lineWidth = lw;
+      ctx.strokeStyle = col(c.cross * Math.max(c.a, 0.7));
+      ctx.lineWidth = lw * 0.7;
       ctx.beginPath();
       ctx.moveTo(c.x * S - r, c.y * S); ctx.lineTo(c.x * S + r, c.y * S);
       ctx.moveTo(c.x * S, c.y * S - r); ctx.lineTo(c.x * S, c.y * S + r);
       ctx.stroke();
     }
 
-    // digital glitch: knocked-out slices, offset slivers, hairlines, glyphs
     if (c.glitch > 0.05) {
       const g = c.glitch;
       const tick = Math.floor(t * 7 + m.seed * 13);
@@ -489,7 +588,7 @@ export class FaceArt {
       ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x1 + S * 0.12 * h2, y); ctx.stroke();
       if ((m.seed * 10) % 3 < 1.6) {
         ctx.fillStyle = col(0.9 * g * c.a);
-        ctx.font = `${Math.round(S * 0.02)}px "Instrument Serif", Georgia, serif`;
+        ctx.font = `${Math.round(S * 0.02)}px "Geist Mono", ui-monospace, monospace`;
         ctx.fillText(m.glyph, x1 + S * (0.02 + 0.05 * ((m.seed * 7) % 1)), y + S * 0.007);
       }
     }

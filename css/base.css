@@ -1,7 +1,6 @@
 :root {
-  --sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  --serif: 'Instrument Serif', Georgia, serif;
+  --sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --ink: #111;
   --muted: #8a8a8a;
   --line: rgba(0, 0, 0, 0.09);
@@ -14,8 +13,9 @@ html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   font-family: var(--sans);
-  font-weight: 400;
+  font-weight: 300;
   color: var(--ink);
+  letter-spacing: -0.005em;
   background: #fff;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -24,7 +24,7 @@ body {
 body[data-view='play'] { background: #f7f2e8; }
 body[data-view='music'] { background: var(--dark); color: #d9dde3; }
 a { color: inherit; }
-h1, h2, h3 { margin: 0; font-weight: 500; }
+h1, h2, h3 { margin: 0; font-weight: 400; }
 p { margin: 0; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 1.5px solid currentColor; outline-offset: 3px; }
@@ -38,7 +38,7 @@ p { margin: 0; }
   position: fixed; z-index: 30; top: 18px; left: 20px;
   display: inline-flex; align-items: center; gap: 0.6rem;
   padding: 0.7rem 1.15rem 0.7rem 0.9rem;
-  font: 500 0.95rem/1 var(--sans); letter-spacing: 0.01em;
+  font: 400 0.92rem/1 var(--sans); letter-spacing: 0;
   text-decoration: none;
   border: 1px solid currentColor; border-radius: 999px;
   background: color-mix(in srgb, Canvas 80%, transparent);

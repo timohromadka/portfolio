@@ -13,7 +13,7 @@ const SECTIONS = [
 const todo = (x) => (x.todo ? el('span', { class: 'todo' }, 'placeholder') : null);
 const BINS = 220;      // bars in the top waveform
 const N = 128;         // samples per Fourier window
-const TERMS = 28;      // epicycles drawn
+const APPROX = 7;      // circles in the bold approximation
 
 // ── content ──────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ export function mountMusic(root) {
       el('section', { class: 'm-hero', 'data-sec': 'listen' },
         el('h1', { class: 'm-title' }, 'music', el('em', {}, ' & '), 'writing'),
         wave, four, player,
-        el('p', { class: 'm-caption' }, 'the curves are the waveform’s Fourier series — each circle one frequency, together tracing the sound above')),
+        el('p', { class: 'm-caption' }, 'faint line: the exact Fourier series of the sound above · bold line: its seven strongest circles')),
       el('section', { class: 'm-sec', 'data-sec': 'events' },
         el('h2', { class: 'reveal' }, el('span', {}, '01'), 'events'),
         el('ol', { class: 'm-timeline' }, sorted.map((e, i) => eventRow(e, i, today)))),
@@ -159,7 +159,6 @@ class Viz {
     this.peaks = new Array(BINS).fill(0);
     this.coef = dft(new Float32Array(N)).map((c) => ({ ...c }));
     this.trail = [];
-    this.trace = [];
     this.tau = 0;
     this.stars = Array.from({ length: 160 }, () => ({ a: Math.random() * 6.28, r: Math.random(), s: 0.2 + Math.random() * 1.6, z: Math.random() }));
     this.audio = new Audio();
@@ -193,7 +192,7 @@ class Viz {
     const tr = tracks[this.i];
     this.track = tr;
     this.pos = 0;
-    this.trace = []; this.trail = [];
+    this.trail = [];
     this.player.querySelector('.m-player__title').textContent = tr.title;
     this.player.querySelector('.m-player__meta').textContent = tr.meta + (tr.src ? '' : ' · visual only');
     this.gen = synth(tr.seed ?? this.i);
@@ -288,6 +287,7 @@ class Viz {
   start() {
     if (this.running) return;
     this.running = true;
+    this.lastT = null;
     this.size();
     let last = performance.now(), acc = 0;
     const loop = (now) => {
@@ -295,7 +295,7 @@ class Viz {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       acc += dt;
-      if (acc > 0.12) { acc = 0; this.retarget(); }
+      if (acc > 0.3) { acc = 0; this.retarget(); }
       this.frame(dt, now / 1000);
       this.raf = requestAnimationFrame(loop);
     };
@@ -322,7 +322,7 @@ class Viz {
     for (let b = 0; b < BINS; b++) this.peaks[b] = lerp(this.peaks[b], this.target[b], 1 - Math.exp(-dt * 5));
     // morph coefficients smoothly toward the newest window
     if (this.next) for (let j = 0; j < this.coef.length; j++) {
-      const k = 1 - Math.exp(-dt * 4);
+      const k = 1 - Math.exp(-dt * 1.3);
       this.coef[j].re = lerp(this.coef[j].re, this.next[j].re, k);
       this.coef[j].im = lerp(this.coef[j].im, this.next[j].im, k);
     }
@@ -349,7 +349,7 @@ class Viz {
     x.beginPath(); x.ellipse(cx, cy, W * 0.42, H * 0.46, 0.2, 0, Math.PI * 2); x.stroke();
     x.beginPath(); x.arc(cx - W * 0.3, cy + H * 0.1, H * 0.5, -1.2, 1.4); x.stroke();
     // HUD grid patches with digits
-    x.font = `${9 * d}px "JetBrains Mono", monospace`;
+    x.font = `${9 * d}px "Geist Mono", monospace`;
     for (const [gx, gy] of [[0.03, 0.62], [0.86, 0.8]]) {
       const X = gx * W, Y = gy * H, s = 14 * d;
       x.strokeStyle = 'rgba(220,228,240,0.08)';
@@ -389,61 +389,76 @@ class Viz {
     x.fillRect(px - 0.5 * d, 0, 1 * d, H);
   }
 
-  drawFourier(dt) {
+  // Two drifting light-trails, like a long exposure of a moving bow: a soft
+  // line from the exact Fourier series of the current slice of sound, and a
+  // bold one from only its strongest few circles (the approximation).
+  drawFourier(dt, t) {
     const c = this.four, x = c.getContext('2d'), W = c.width, H = c.height, d = this.dpr;
     x.clearRect(0, 0, W, H);
-    const terms = [...this.coef].map((q) => ({ ...q, amp: Math.hypot(q.re, q.im), ph: Math.atan2(q.im, q.re) }))
-      .sort((a, b) => b.amp - a.amp).slice(0, TERMS);
-    const total = terms.reduce((s, q) => s + q.amp, 0) || 1;
-    const A = (H * 0.36) / Math.max(1, total * 0.75);
-    const ox = W * 0.24, oy = H * 0.5;
-    if (!reducedMotion()) this.tau += dt * (this.playing ? 1 : 0.35) * (N / 3.2);
-    const tau = this.tau;
-
-    let px = ox, py = oy;
-    x.lineWidth = d * 0.8;
-    for (const q of terms) {
-      const r = q.amp * A;
-      const a = (2 * Math.PI * q.k * tau) / N + q.ph;
-      x.strokeStyle = 'rgba(210,220,235,0.14)';
-      x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.stroke();
-      const nx = px + Math.sin(a) * r, ny = py - Math.cos(a) * r;
-      x.strokeStyle = 'rgba(230,236,245,0.45)';
-      x.beginPath(); x.moveTo(px, py); x.lineTo(nx, ny); x.stroke();
-      px = nx; py = ny;
+    const terms = this.coef.map((q) => ({ k: q.k, amp: Math.hypot(q.re, q.im), ph: Math.atan2(q.im, q.re) }))
+      .sort((p, q) => q.amp - p.amp);
+    // the bold line keeps the strongest low-frequency circles, so it loops smoothly
+    const approx = terms.filter((q) => q.k <= 8).slice(0, APPROX);
+    // scale so the approximation's circles always fill the height, loud or quiet
+    const A = (H * 0.34) / Math.max(0.15, approx.reduce((sum, q) => sum + q.amp, 0));
+    const ox = W * (W > 900 * d ? 0.74 : 0.66), oy = H * 0.5;
+    const tip = (list, tau, draw) => {
+      let px = ox, py = oy;
+      for (const q of list) {
+        const r = q.amp * A, a = (2 * Math.PI * q.k * tau) / N + q.ph;
+        const nx = px + Math.sin(a) * r, ny = py - Math.cos(a) * r;
+        if (draw) {
+          x.strokeStyle = 'rgba(210,220,235,0.13)';
+          x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.stroke();
+          x.strokeStyle = 'rgba(230,236,245,0.4)';
+          x.beginPath(); x.moveTo(px, py); x.lineTo(nx, ny); x.stroke();
+        }
+        px = nx; py = ny;
+      }
+      return [px, py];
+    };
+    // sub-step so fast circles still leave a smooth trail
+    const speed = reducedMotion() ? 0 : (this.playing ? 1 : 0.4) * (N / 5);
+    const SUB = 6;
+    const t0 = this.lastT ?? t - dt;
+    this.lastT = t;
+    for (let k = 1; k <= SUB; k++) {
+      const tk = this.tau + (dt * speed * k) / SUB;
+      this.trail.push({ e: tip(terms, tk, false), a: tip(approx, tk, false), t: t0 + ((t - t0) * k) / SUB });
     }
-    // light-trail of the tip (the loops)
-    this.trail.push([px, py]);
-    if (this.trail.length > 420) this.trail.shift();
+    this.tau += dt * speed;
+    x.lineWidth = d * 0.8;
+    const ap = tip(approx, this.tau, true);
+    const ex = this.trail[this.trail.length - 1].e;
+    const drift = W * 0.07 / d;
+    while (this.trail.length && ox - (t - this.trail[0].t) * drift * d < -40 * d) this.trail.shift();
+    const pos = (p, q) => [p[q][0] - (t - p.t) * drift * d, p[q][1]];
+    const n = this.trail.length;
+    // exact series: soft hairline
+    x.lineWidth = d * 0.7;
+    for (let i = 1; i < n; i++) {
+      x.strokeStyle = `rgba(220,228,240,${0.1 + 0.45 * (i / n)})`;
+      x.beginPath(); x.moveTo(...pos(this.trail[i - 1], 'e')); x.lineTo(...pos(this.trail[i], 'e')); x.stroke();
+    }
+    // approximation: bold, glowing
     x.save();
-    x.shadowColor = 'rgba(255,255,255,0.8)';
-    x.shadowBlur = 8 * d;
-    for (let i = 1; i < this.trail.length; i++) {
-      x.strokeStyle = `rgba(245,248,255,${(i / this.trail.length) * 0.85})`;
-      x.lineWidth = d * (0.6 + (1.4 * i) / this.trail.length);
-      x.beginPath(); x.moveTo(...this.trail[i - 1]); x.lineTo(...this.trail[i]); x.stroke();
+    x.shadowColor = 'rgba(255,255,255,0.75)';
+    x.shadowBlur = 10 * d;
+    x.lineCap = 'round';
+    for (let i = 1; i < n; i++) {
+      const f = i / n;
+      x.strokeStyle = `rgba(246,248,252,${0.12 + 0.8 * f})`;
+      x.lineWidth = d * (1.2 + 1.8 * f);
+      x.beginPath(); x.moveTo(...pos(this.trail[i - 1], 'a')); x.lineTo(...pos(this.trail[i], 'a')); x.stroke();
     }
     x.restore();
-    // the reconstructed wave, scrolling right from the pen
-    const penX = W * 0.5;
-    this.trace.unshift(py);
-    const maxLen = Math.floor((W - penX) / (1.6 * d));
-    if (this.trace.length > maxLen) this.trace.length = maxLen;
-    x.strokeStyle = 'rgba(230,236,245,0.25)';
-    x.setLineDash([3 * d, 4 * d]);
-    x.beginPath(); x.moveTo(px, py); x.lineTo(penX, py); x.stroke();
-    x.setLineDash([]);
-    x.strokeStyle = 'rgba(240,244,250,0.9)';
-    x.lineWidth = 1.3 * d;
-    x.beginPath();
-    this.trace.forEach((y, i) => (i ? x.lineTo(penX + i * 1.6 * d, y) : x.moveTo(penX, y)));
-    x.stroke();
     x.fillStyle = '#fff';
-    x.beginPath(); x.arc(penX, py, 2.5 * d, 0, 7); x.fill();
-    // little axis ticks
+    x.beginPath(); x.arc(ap[0], ap[1], 2.6 * d, 0, 7); x.fill();
+    x.fillStyle = 'rgba(220,228,240,0.6)';
+    x.beginPath(); x.arc(ex[0], ex[1], 1.6 * d, 0, 7); x.fill();
     x.fillStyle = 'rgba(220,228,240,0.35)';
-    x.font = `${9 * d}px "JetBrains Mono", monospace`;
-    x.fillText(`Σ ${terms.length} terms`, ox - 40 * d, H - 10 * d);
-    x.fillText(`f₁ = ${terms[0] ? terms[0].k : 0}`, penX, H - 10 * d);
+    x.font = `${9 * d}px "Geist Mono", monospace`;
+    x.fillText(`exact · ${terms.length} terms`, 0, H - 26 * d);
+    x.fillText(`approx · ${APPROX} terms`, 0, H - 12 * d);
   }
 }

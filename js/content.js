@@ -177,6 +177,7 @@ export const hobbies = [
 //  read it). Leave src null to show a generated waveform instead.
 
 export const tracks = [
+  { title: 'Geist', meta: 'Kavinsky · v13 (test)', src: 'audio/kavinsky_geist_v13.mp3', seed: 1 },
   { title: 'Untitled I', meta: 'piano · placeholder', src: null, seed: 3 },
   { title: 'Untitled II', meta: 'piano · placeholder', src: null, seed: 11 },
   { title: 'Untitled III', meta: 'piano · placeholder', src: null, seed: 27 },
